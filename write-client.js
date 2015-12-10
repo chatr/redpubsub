@@ -3,5 +3,5 @@ RPS.write = function (collection, method, options) {
 
     options.selector = options.selector || options.doc;
 
-    RPS._write(collection, method, options, options.callback || RPS._noop);
+    RPS._write(collection, method, options, options.callback);
 };
