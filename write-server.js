@@ -19,6 +19,7 @@ RPS.write = function (collection, method, options) {
             var message = JSON.stringify({
                 _serverId: RPS._serverId,
                 selector: options.selector,
+                modifier: options.modifier,
                 id: id
             });
 
@@ -54,6 +55,9 @@ RPS.write = function (collection, method, options) {
             console.log('RPS.write → FETCH DOCS FROM DB; options.selector, fields:', options.selector, findOptions);
             docs = collection.find(options.selector, findOptions).fetch();
             idMap = _.pluck(docs, '_id');
+            if (idMap.length === 1) {
+                idMap = idMap[0];
+            }
         }
     }
 
