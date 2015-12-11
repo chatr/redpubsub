@@ -2,13 +2,13 @@ RPS.write = function (collection, method, options) {
     console.log('RPS.write; collection._name:', collection._name);
 
     var config = RPS.config[collection._name] || {},
-        channels, idMap = [], docs, fields;
+        channels, idMap, docs, fields;
 
     var publish = function (res) {
         if (channels) {
             console.log('RPS.write → ready to notify Redis; res:', res);
 
-            var id = options.selector._id || idMap;
+            var id = idMap || options.selector._id;
 
             if (!id || !id.length) {
                 id = method === 'insert'? res : method === 'upsert' && res.insertedId;
@@ -46,7 +46,7 @@ RPS.write = function (collection, method, options) {
 
         console.log('RPS.write; _.keys(options.fields), existedFields, missedFields:', _.keys(options.fields), existedFields, missedFields);
 
-        if ((missedFields.length && channelsIsFunction) || !options.selector._id) {
+        if ((missedFields.length && channelsIsFunction) || !options.selector._id || !_.isString(options.selector._id)) {
             var findOptions = {fields: {}};
             _.each(missedFields.length ? missedFields : ['_id'], function(fieldName) {
                 findOptions.fields[fieldName] = 1;
