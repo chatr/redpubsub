@@ -24,13 +24,13 @@ Package.onUse(function(api) {
   api.addFiles('redis.js', 'server');
   api.addFiles('write.js');
   api.addFiles('write-client.js', 'client');
-  api.addFiles('write-server.js', 'server');
+  api.addFiles(['write-server.js', 'messenger.js', 'observe-changes.js'], 'server');
 
   api.export('RPS');
 });
 
 Package.onTest(function(api) {
   api.use('tinytest');
-  api.use('artpolikarpov:redpubsub');
+  api.use('chatra:redpubsub');
   api.addFiles('redpubsub-tests.js');
 });

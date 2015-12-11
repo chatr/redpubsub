@@ -1,34 +1,39 @@
 RPS.write = function (collection, method, options) {
-    console.log('RPS.write; collection._name, method, options:', collection._name, method, options);
-
-    var config = RPS.config[collection._name] || {},
+    var collectionName = collection._name,
+        config = RPS.config[collectionName] || {},
         channels, idMap, docs, fields;
 
+    console.log('RPS.write; collectionName, method, options, config:', collectionName, method, options, config);
+
     var publish = function (res) {
-        if (channels) {
-            console.log('RPS.write → ready to notify Redis; res:', res);
+        Meteor.defer(function () {
+            if (channels) {
+                console.log('RPS.write → ready to notify Redis; res:', res);
 
-            var id = idMap || options.selector._id;
+                var id = idMap || options.selector._id;
 
-            if (!id || !id.length) {
-                id = method === 'insert'? res : method === 'upsert' && res.insertedId;
-            }
-
-            var message = JSON.stringify({
-                _serverId: RPS._serverId,
-                selector: options.selector,
-                modifier: options.modifier,
-                method: method,
-                id: id
-            });
-
-            _.each(_.isArray(channels) ? channels : [channels], function (channel) {
-                console.log('RPS.write → publish to Redis; channel, message:', channel, message);
-                if (channel && message) {
-                    RPS._pub(channel, message);
+                if (!id || !id.length) {
+                    id = method === 'insert' ? res : method === 'upsert' && res.insertedId;
                 }
-            });
-        }
+
+                var message = {
+                        _serverId: RPS._serverId,
+                        selector: options.selector,
+                        modifier: options.modifier,
+                        method: method,
+                        id: id
+                    },
+                    messageString = JSON.stringify(message);
+
+                _.each(_.isArray(channels) ? channels : [channels], function (channel) {
+                    console.log('RPS.write → publish to Redis; channel, message:', channel, messageString);
+                    if (channel) {
+                        RPS._messenger.onMessage(channel, message);
+                        RPS._pub(channel, messageString);
+                    }
+                });
+            }
+        });
 
         return res;
     };
@@ -36,7 +41,7 @@ RPS.write = function (collection, method, options) {
     options.selector = options.selector || options.doc;
     options.fields = options.fields || {};
 
-    channels = options.channels || config.channels;
+    channels = options.channels || config.channels || collectionName;
     var channelsIsFunction = _.isFunction(channels);
     var fetchFields = options.fetchFields || config.fetchFields;
     if (channels && method !== 'insert') {
@@ -47,7 +52,7 @@ RPS.write = function (collection, method, options) {
 
         if ((missedFields.length && channelsIsFunction) || !options.selector._id || !_.isString(options.selector._id)) {
             var findOptions = {fields: {}};
-            _.each(missedFields.length ? missedFields : ['_id'], function(fieldName) {
+            _.each(missedFields.length ? missedFields : ['_id'], function (fieldName) {
                 findOptions.fields[fieldName] = 1;
             });
 

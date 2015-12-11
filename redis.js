@@ -6,7 +6,7 @@ var createRedisClient = function (conf, logLabel) {
 
     logLabel = 'RPS: [' + logLabel + '] ';
 
-    console.info(logLabel + 'connecting to redis...', redisConfToString(conf));
+    console.info(logLabel + 'connecting to Redis...', redisConfToString(conf));
 
     var client = Redis.createClient(conf.port, conf.host, {
         retry_max_delay: 1000 * 30
@@ -23,7 +23,7 @@ var createRedisClient = function (conf, logLabel) {
     }
 
     client.on('error', function (err) {
-        console.error(logLabel + 'no connection to Redis', err.toString())
+        console.error(logLabel + err.toString())
     });
 
     client.on('connect', function () {
@@ -44,6 +44,14 @@ var createRedisClient = function (conf, logLabel) {
 
     client.on('message', function (channel, message) {
         console.info(logLabel + channel + ': ' + message);
+        try {
+            message = JSON.parse(message);
+            if (message._serverId !== RPS._serverId) {
+                RPS._messenger.onMessage(channel, message);
+            }
+        } catch (err) {
+            console.error(logLabel + 'bad message: ' + channel + ': ' + message, err.toString());
+        }
     });
 
     return client;
