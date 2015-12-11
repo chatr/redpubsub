@@ -1,5 +1,5 @@
 RPS.write = function (collection, method, options) {
-    console.log('RPS.write; collection._name:', collection._name);
+    console.log('RPS.write; collection._name, method, options:', collection._name, method, options);
 
     var config = RPS.config[collection._name] || {},
         channels, idMap, docs, fields;
@@ -14,12 +14,11 @@ RPS.write = function (collection, method, options) {
                 id = method === 'insert'? res : method === 'upsert' && res.insertedId;
             }
 
-            console.log('RPS.write; channels:', channels);
-
             var message = JSON.stringify({
                 _serverId: RPS._serverId,
                 selector: options.selector,
                 modifier: options.modifier,
+                method: method,
                 id: id
             });
 
