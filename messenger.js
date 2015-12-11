@@ -28,7 +28,7 @@ RPS._messenger = {
         delete observers[observerKey];
     },
     onMessage: function (channel, message) {
-        _.each(channels[channel], function (value, observerKey) {
+        _.each(channels[channel], function (flag, observerKey) {
             var observer = RPS._observers[observerKey];
             if (observer) {
                 observer.onMessage(message);

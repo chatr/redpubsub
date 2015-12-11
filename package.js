@@ -11,20 +11,21 @@ Package.describe({
 });
 
 Npm.depends({
-  'redis': '2.4.2',
-  'url': '0.11.0'
+  redis: '2.4.2',
+  url: '0.11.0'
 });
 
 Package.onUse(function(api) {
   api.versionsFrom('1.2.1');
 
   api.use(['random', 'underscore', 'ddp-server']);
+  api.use(['minimongo', 'diff-sequence'], 'server');
 
   api.addFiles('namespace.js');
-  api.addFiles('redis.js', 'server');
+  api.addFiles(['utils-server.js', 'redis.js'], 'server');
   api.addFiles('write.js');
   api.addFiles('write-client.js', 'client');
-  api.addFiles(['write-server.js', 'messenger.js', 'observe-changes.js'], 'server');
+  api.addFiles(['write-server.js', 'messenger.js', 'observe-changes.js', 'publish.js'], 'server');
 
   api.export('RPS');
 });

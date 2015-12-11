@@ -27,17 +27,22 @@ RPS._observer = function (collection, options, key) {
 
     this.collection = collection;
     this.options = options;
-    this.key = key;
+    this.selector = options.selector;
+    this.findOptions = options.options || {};
+    this.needToFetchAlways = this.findOptions.limit || this.findOptions.sort;
+    this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
+
     this.channel = options.channel || collection._name;
+    this.key = key;
     this.listeners = {};
     this.docs = {};
     this.messageQueue = [];
 
     // You may not filter out _id when observing changes, because the id is a core
     // part of the observeChanges API
-    if (options.options.fields &&
-        (options.options.fields._id === 0 ||
-        options.options.fields._id === false)) {
+    if (this.findOptions.fields &&
+        (this.findOptions.fields._id === 0 ||
+        this.findOptions.fields._id === false)) {
         throw Error("You may not observe a cursor with {fields: {_id: 0}}");
     }
 
@@ -64,6 +69,14 @@ RPS._observer.prototype.addListener = function (listenerId, callbacks) {
     this.resume();
 };
 
+RPS._observer.prototype.callListeners = function (action, id, fields) {
+    console.log('RPS._observer.callListeners');
+    _.each(this.listeners, function (callbacks, listenerId) {
+        console.log('RPS._observer.callListeners; listenerId, action, id, fields:', listenerId, action, id, fields);
+        callbacks[action](id, fields);
+    }, this);
+};
+
 RPS._observer.prototype.removeListener = function (listenerId) {
     console.log('RPS._observer.removeListener; listenerId:', listenerId);
     delete this.listeners[listenerId];
@@ -76,7 +89,7 @@ RPS._observer.prototype.initialFetch = function () {
     if (this.initiallyFetched) return;
     console.log('RPS._observer.initialFetch');
 
-    var docs = this.collection.find(this.options.selector, this.options.options).fetch();
+    var docs = this.collection.find(this.selector, this.findOptions).fetch();
 
     _.each(docs, function (doc) {
         this.docs[doc._id] = doc;
@@ -86,7 +99,6 @@ RPS._observer.prototype.initialFetch = function () {
 };
 
 RPS._observer.prototype.initialAdd = function (listenerId) {
-    if (this.initiallyAdded) return;
     console.log('RPS._observer.initialAdd; listenerId:', listenerId);
 
     var callbacks = this.listeners[listenerId];
@@ -94,8 +106,6 @@ RPS._observer.prototype.initialAdd = function (listenerId) {
     _.each(this.docs, function (doc, id) {
         callbacks.added(id, doc);
     });
-
-    this.initiallyAdded = true;
 };
 
 RPS._observer.prototype.onMessage = function (message) {
@@ -111,6 +121,70 @@ RPS._observer.prototype.onMessage = function (message) {
 
 RPS._observer.prototype.handleMessage = function (message) {
     console.log('RPS._observer.handleMessage; message:', message);
+    var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
+        ids = _.isArray(message.id) ? message.id : [message.id];
+
+    _.each(ids, function (id) {
+        var oldDoc = this.docs[id],
+            knownId = !!oldDoc,
+            newDoc;
+
+        if (message.method === 'insert') {
+            newDoc = _.extend(message.selector, {_id: id});
+        }
+
+        var isSimpleModifier = RPS._isSimpleModifier(message.modifier),
+            isRightId = !rightIds || _.contains(rightIds, id),
+            needToFetch = !newDoc && (!knownId || !isSimpleModifier) && isRightId && message.method !== 'remove';
+
+        if (needToFetch) {
+            newDoc = this.collection.findOne({_id: id}, this.findOptions);
+        } else if (!newDoc && oldDoc && _.contains(['update', 'upsert'], message.method)) {
+            newDoc = RPS._modifyDoc(oldDoc, message.modifier);
+        }
+
+        console.log('RPS._observer.handleMessage; newDoc:', newDoc);
+
+        var dokIsOk = newDoc && isRightId && RPS._testMongo(newDoc, this.selector);
+
+        if (message.method !== 'remove' && dokIsOk) {
+            // added or changed
+            var action, fields;
+
+            if (knownId) {
+                action = 'changed';
+                fields = DiffSequence.makeChangedFields(newDoc, oldDoc);
+            } else {
+                action = 'added';
+                fields = newDoc;
+            }
+
+            // todo: filter fields for changes
+            this.callListeners(action, id, fields);
+
+            this.docs[id] = newDoc;
+        } else if (knownId) {
+            // removed
+            this.callListeners('removed', id);
+            delete this.docs[id];
+        }
+
+        if (rightIds) {
+            // remove irrelevant docs
+            var idMap = _.keys(this.docs);
+            _.each(_.difference(idMap, rightIds), function (id) {
+                this.callListeners('removed', id);
+                delete this.docs[id];
+            }, this);
+
+            // add new from DB
+            _.each(_.difference(rightIds, idMap), function (id) {
+                var doc = this.collection.findOne({_id: id}, this.findOptions);
+                this.callListeners('added', id, doc);
+                this.docs[id] = doc;
+            }, this);
+        }
+    }, this);
 };
 
 RPS._observer.prototype.pause = function () {

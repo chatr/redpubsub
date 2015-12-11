@@ -38,7 +38,8 @@ RPS.write = function (collection, method, options) {
         return res;
     };
 
-    options.selector = options.selector || options.doc;
+    options = options || {};
+    options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : options.doc || {};
     options.fields = options.fields || {};
 
     channels = options.channels || config.channels || collectionName;

@@ -42,7 +42,7 @@ var createRedisClient = function (conf, logLabel) {
         console.info(logLabel + 'unsubscribed from "' +  channel + '"' + ' (' + count + ')');
     });
 
-    client.on('message', function (channel, message) {
+    client.on('message', Meteor.bindEnvironment(function (channel, message) {
         console.info(logLabel + channel + ': ' + message);
         try {
             message = JSON.parse(message);
@@ -52,7 +52,7 @@ var createRedisClient = function (conf, logLabel) {
         } catch (err) {
             console.error(logLabel + 'bad message: ' + channel + ': ' + message, err.toString());
         }
-    });
+    }));
 
     return client;
 };

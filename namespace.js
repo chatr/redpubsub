@@ -1,4 +1,3 @@
 RPS = {
-    config: {},
-    _noop: function () {}
+    config: {}
 };
