@@ -42,15 +42,17 @@ var createRedisClient = function (conf, logLabel) {
         console.info(logLabel + 'unsubscribed from "' +  channel + '"' + ' (' + count + ')');
     });
 
-    client.on('message', Meteor.bindEnvironment(function (channel, message) {
-        console.info(logLabel + channel + ': ' + message);
+    client.on('message', Meteor.bindEnvironment(function (channel, messageString) {
+        console.info(logLabel + channel + ': ' + messageString);
+        var message;
         try {
-            message = JSON.parse(message);
-            if (message._serverId !== RPS._serverId) {
-                RPS._messenger.onMessage(channel, message);
-            }
+            message = JSON.parse(messageString);
         } catch (err) {
-            console.error(logLabel + 'bad message: ' + channel + ': ' + message, err.toString());
+            console.error(logLabel + 'bad message: ' + channel + ': ' + messageString, err.toString());
+        }
+
+        if (message && message._serverId !== RPS._serverId) {
+            RPS._messenger.onMessage(channel, message);
         }
     }));
 

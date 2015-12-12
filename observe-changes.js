@@ -134,7 +134,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         if (message.method === 'insert') {
             newDoc = _.extend(message.selector, {_id: id});
         } else if (message.withoutMongo) {
-            newDoc = RPS._modifyDoc(oldDoc || {}, _.extend(message.modifier, {_id: id}));
+            newDoc = RPS._modifyDoc(_.extend(oldDoc || {}, {_id: id}), message.modifier);
         }
 
         console.log('RPS._observer.handleMessage; newDoc:', newDoc);
@@ -150,6 +150,8 @@ RPS._observer.prototype.handleMessage = function (message) {
         console.log('RPS._observer.handleMessage; newDoc:', newDoc);
 
         var dokIsOk = newDoc && isRightId && RPS._testMongo(newDoc, this.selector);
+
+        console.log('RPS._observer.handleMessage; dokIsOk:', dokIsOk);
 
         if (message.method !== 'remove' && dokIsOk) {
             // added or changed

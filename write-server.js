@@ -45,7 +45,7 @@ RPS.write = function (collection, method, options) {
 
     channels = options.channels || config.channels || collectionName;
     var channelsIsFunction = _.isFunction(channels);
-    var fetchFields = options.fetchFields || config.fetchFields;
+    var fetchFields = _.compact(_.union(options.fetchFields || config.fetchFields, ['_id']));
     if (channels && method !== 'insert') {
         var existedFields = _.union(_.keys(options.selector), _.keys(options.fields)),
             missedFields = _.difference(fetchFields, existedFields);
