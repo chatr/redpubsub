@@ -83,9 +83,10 @@ RPS.write = function (collection, method, options) {
     }
 
     var callback = _.last(_.toArray(arguments)),
-        async = _.isFunction(callback);
+        async = _.isFunction(callback),
+        isMessage = method === 'message';
 
-    if (async) {
+    if (async && !isMessage) {
         return RPS._write(collection, method, options, function (err, res) {
             if (!err) {
                 publish(res);
@@ -93,6 +94,6 @@ RPS.write = function (collection, method, options) {
             (callback)(err, res);
         });
     } else {
-        return publish(RPS._write(collection, method, options));
+        return publish(!isMessage && RPS._write(collection, method, options));
     }
 };

@@ -127,15 +127,21 @@ RPS._observer.prototype.handleMessage = function (message) {
     _.each(ids, function (id) {
         var oldDoc = this.docs[id],
             knownId = !!oldDoc,
+            isSimpleModifier = RPS._isSimpleModifier(message.modifier),
+            isRightId = !rightIds || _.contains(rightIds, id),
             newDoc;
 
         if (message.method === 'insert') {
             newDoc = _.extend(message.selector, {_id: id});
         }
 
-        var isSimpleModifier = RPS._isSimpleModifier(message.modifier),
-            isRightId = !rightIds || _.contains(rightIds, id),
-            needToFetch = !newDoc && (!knownId || !isSimpleModifier) && isRightId && message.method !== 'remove';
+        if (message.method === 'message') {
+            newDoc = RPS._modifyDoc(oldDoc || {}, _.extend(message.modifier, {_id: id}));
+        }
+
+        console.log('RPS._observer.handleMessage; newDoc:', newDoc);
+
+        var needToFetch = !newDoc && (!knownId || !isSimpleModifier) && isRightId && message.method !== 'remove';
 
         if (needToFetch) {
             newDoc = this.collection.findOne({_id: id}, this.findOptions);

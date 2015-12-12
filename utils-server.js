@@ -66,7 +66,7 @@ RPS._deepExtend = function (dest) {
 RPS._modifyDoc = function (doc, modifier) {
 	console.log('RPS._modifyDoc; doc, modifier:', doc, modifier);
 	if (!RPS._containsOperators(modifier)) {
-		return _.extend(modifier, {_id: doc._id});
+		return modifier._id ? modifier : _.extend(modifier, {_id: doc._id});
 	} else if (RPS._containsOnlySetters(modifier)) {
 		var setter = {},
 			unsetter = {};
