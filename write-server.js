@@ -21,6 +21,7 @@ RPS.write = function (collection, method, options) {
                         selector: options.selector,
                         modifier: options.modifier,
                         method: method,
+                        withoutMongo: options.withoutMongo,
                         id: id
                     },
                     messageString = JSON.stringify(message);
@@ -83,10 +84,9 @@ RPS.write = function (collection, method, options) {
     }
 
     var callback = _.last(_.toArray(arguments)),
-        async = _.isFunction(callback),
-        isMessage = method === 'message';
+        async = _.isFunction(callback);
 
-    if (async && !isMessage) {
+    if (async && !options.withoutMongo) {
         return RPS._write(collection, method, options, function (err, res) {
             if (!err) {
                 publish(res);
@@ -94,6 +94,6 @@ RPS.write = function (collection, method, options) {
             (callback)(err, res);
         });
     } else {
-        return publish(!isMessage && RPS._write(collection, method, options));
+        return publish(!options.withoutMongo && RPS._write(collection, method, options));
     }
 };

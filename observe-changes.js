@@ -133,9 +133,7 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         if (message.method === 'insert') {
             newDoc = _.extend(message.selector, {_id: id});
-        }
-
-        if (message.method === 'message') {
+        } else if (message.withoutMongo) {
             newDoc = RPS._modifyDoc(oldDoc || {}, _.extend(message.modifier, {_id: id}));
         }
 
