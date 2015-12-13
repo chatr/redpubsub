@@ -31,7 +31,7 @@ RPS._messenger = {
         _.each(channels[channel], function (flag, observerKey) {
             var observer = RPS._observers[observerKey];
             if (observer) {
-                observer.onMessage(message);
+                observer.onMessage(_._deepExtend({}, message));
             }
         });
     }

@@ -12,15 +12,15 @@ RPS.publish = function (sub, requests) {
 
         var handler = RPS.observeChanges(request.collection, request.options, {
             added: function (id, fields) {
-                console.log('RPS.publish.added; collectionName, id, fields:', collectionName, id, fields);
+                console.log('RPS.publish.added; request.options._name, collectionName, id, fields:', request.options._name, collectionName, id, fields);
                 sub.added(collectionName, id, fields);
             },
             changed: function (id, fields) {
-                console.log('RPS.publish.changed; collectionName, id, fields:', collectionName, id, fields);
+                console.log('RPS.publish.changed; request.options._name, collectionName, id, fields:', request.options._name, collectionName, id, fields);
                 sub.changed(collectionName, id, fields);
             },
             removed: function (id) {
-                console.log('RPS.publish.removed; collectionName, id:', collectionName, id);
+                console.log('RPS.publish.removed; request.options._name, collectionName, id:', request.options._name, collectionName, id);
                 sub.removed(collectionName, id);
             }
         });

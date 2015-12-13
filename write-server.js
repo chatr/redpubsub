@@ -6,35 +6,33 @@ RPS.write = function (collection, method, options) {
     console.log('RPS.write; collectionName, method, options, config:', collectionName, method, options, config);
 
     var publish = function (res) {
-        Meteor.defer(function () {
-            if (channels) {
-                console.log('RPS.write → ready to notify Redis; res:', res);
+        if (channels) {
+            console.log('RPS.write → ready to notify Redis; res:', res);
 
-                var id = idMap || options.selector._id;
+            var id = idMap || options.selector._id;
 
-                if (!id || !id.length) {
-                    id = method === 'insert' ? res : method === 'upsert' && res.insertedId;
-                }
-
-                var message = {
-                        _serverId: RPS._serverId,
-                        selector: options.selector,
-                        modifier: options.modifier,
-                        method: method,
-                        withoutMongo: options.withoutMongo,
-                        id: id
-                    },
-                    messageString = JSON.stringify(message);
-
-                _.each(_.isArray(channels) ? channels : [channels], function (channel) {
-                    console.log('RPS.write → publish to Redis; channel, message:', channel, messageString);
-                    if (channel) {
-                        RPS._messenger.onMessage(channel, message);
-                        RPS._pub(channel, messageString);
-                    }
-                });
+            if (!id || !id.length) {
+                id = method === 'insert' ? res : method === 'upsert' && res.insertedId;
             }
-        });
+
+            var message = {
+                    _serverId: RPS._serverId,
+                    selector: options.selector,
+                    modifier: options.modifier,
+                    method: method,
+                    withoutMongo: options.withoutMongo,
+                    id: id
+                },
+                messageString = JSON.stringify(message);
+
+            _.each(_.isArray(channels) ? channels : [channels], function (channel) {
+                console.log('RPS.write → publish to Redis; channel, message:', channel, messageString);
+                if (channel) {
+                    RPS._messenger.onMessage(channel, message);
+                    RPS._pub(channel, messageString);
+                }
+            });
+        }
 
         return res;
     };

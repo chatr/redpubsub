@@ -29,8 +29,11 @@ RPS._observer = function (collection, options, key) {
     this.options = options;
     this.selector = options.selector;
     this.findOptions = options.options || {};
+    this.findOptions.fields = this.findOptions.fields || {};
     this.needToFetchAlways = this.findOptions.limit || this.findOptions.sort;
     this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
+
+    this.projectionFn = LocalCollection._compileProjection(this.findOptions.fields);
 
     this.channel = options.channel || collection._name;
     this.key = key;
@@ -40,9 +43,8 @@ RPS._observer = function (collection, options, key) {
 
     // You may not filter out _id when observing changes, because the id is a core
     // part of the observeChanges API
-    if (this.findOptions.fields &&
-        (this.findOptions.fields._id === 0 ||
-        this.findOptions.fields._id === false)) {
+    if (this.findOptions.fields._id === 0 ||
+        this.findOptions.fields._id === false) {
         throw Error("You may not observe a cursor with {fields: {_id: 0}}");
     }
 
@@ -120,6 +122,7 @@ RPS._observer.prototype.onMessage = function (message) {
 };
 
 RPS._observer.prototype.handleMessage = function (message) {
+    this.pause();
     console.log('RPS._observer.handleMessage; message:', message);
     var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
         ids = _.isArray(message.id) ? message.id : [message.id];
@@ -147,10 +150,11 @@ RPS._observer.prototype.handleMessage = function (message) {
             newDoc = RPS._modifyDoc(oldDoc, message.modifier);
         }
 
+        var dokIsOk = newDoc && isRightId && (message.withoutMongo || needToFetch || _.contains(rightIds, id) || this.collection.find(_.extend({}, this.selector, {_id: id}), this.quickFindOptions).count());
+
+        console.log('RPS._observer.handleMessage; _.isEqual(newDoc, oldDoc):', _.isEqual(newDoc, oldDoc));
         console.log('RPS._observer.handleMessage; newDoc:', newDoc);
-
-        var dokIsOk = newDoc && isRightId && RPS._testMongo(newDoc, this.selector);
-
+        console.log('RPS._observer.handleMessage; oldDoc:', oldDoc);
         console.log('RPS._observer.handleMessage; dokIsOk:', dokIsOk);
 
         if (message.method !== 'remove' && dokIsOk) {
@@ -164,6 +168,8 @@ RPS._observer.prototype.handleMessage = function (message) {
                 action = 'added';
                 fields = newDoc;
             }
+
+            console.log('RPS._observer.handleMessage; fields:', fields);
 
             // todo: filter fields for changes
             this.callListeners(action, id, fields);
@@ -191,6 +197,8 @@ RPS._observer.prototype.handleMessage = function (message) {
             }, this);
         }
     }, this);
+
+    this.resume();
 };
 
 RPS._observer.prototype.pause = function () {

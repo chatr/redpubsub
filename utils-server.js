@@ -20,6 +20,10 @@ RPS._isSimpleModifier = function (modifier) {
 	return !RPS._containsOperators(modifier) || RPS._containsOnlySetters(modifier);
 };
 
+RPS._isPlainObject = function (object) {
+  return _.isObject(object) && object.constructor === Object && !_.isArguments(object);
+};
+
 RPS._property = function (object, key) {
   var property = object,
       levels = key.split('.'),
@@ -48,8 +52,12 @@ RPS._property = function (object, key) {
 RPS._deepExtend = function (dest) {
   _.each(Array.prototype.slice.call(arguments, 1), function (src) {
     _.each(src, function (value, key) {
-      if (_.isObject(value)) {
-        if (_.isObject(dest[key]) && _.isObject(value)) {
+      console.log('RPS._deepExtend; value, key:', value, key);
+      value = _.clone(value);
+      if (RPS._isPlainObject(value)) {
+        console.log('RPS._deepExtend; _.isObject(value):', _.isObject(value));
+        if (RPS._isPlainObject(dest[key])) {
+          console.log('RPS._deepExtend → RPS._deepExtend');
           RPS._deepExtend(dest[key], value);
         } else {
           dest[key] = value;
@@ -66,7 +74,7 @@ RPS._deepExtend = function (dest) {
 RPS._modifyDoc = function (doc, modifier) {
 	console.log('RPS._modifyDoc; doc, modifier:', doc, modifier);
 	if (!RPS._containsOperators(modifier)) {
-		return modifier && modifier._id ? modifier : _.extend(modifier || {}, {_id: doc._id});
+		return modifier && modifier._id ? modifier : _.extend({}, modifier, {_id: doc._id});
 	} else if (RPS._containsOnlySetters(modifier)) {
 		var setter = {},
 			unsetter = {};
@@ -78,6 +86,8 @@ RPS._modifyDoc = function (doc, modifier) {
 		_.each(modifier.$unset, function (value, key) {
 			RPS._property(unsetter, key, undefined);
 		});
+
+        console.log('RPS._modifyDoc; setter, unsetter:', setter, unsetter);
 
 		return RPS._deepExtend({}, doc, setter, unsetter);
 	}

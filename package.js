@@ -23,7 +23,7 @@ Package.onUse(function(api) {
 
   api.addFiles('namespace.js');
   api.addFiles(['utils-server.js', 'redis.js'], 'server');
-  api.addFiles('write.js');
+  api.addFiles(['write.js']);
   api.addFiles('write-client.js', 'client');
   api.addFiles(['write-server.js', 'messenger.js', 'observe-changes.js', 'publish.js'], 'server');
 
