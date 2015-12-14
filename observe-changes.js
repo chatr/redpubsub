@@ -126,7 +126,16 @@ RPS._observer.prototype.handleMessage = function (message) {
     //this.pause();
     console.log('RPS._observer.handleMessage; message:', message);
     var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
-        ids = _.isArray(message.id) ? message.id : [message.id];
+        ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
+
+    console.log('RPS._observer.handleMessage; message.withoutMongo, ids:', message.withoutMongo, ids);
+    if (message.withoutMongo && !ids) {
+        console.log('RPS._observer.handleMessage; this.docs, this.selector:', this.docs, this.selector);
+        ids = _.pluck(_.where(_.values(this.docs), message.selector), '_id');
+        console.log('RPS._observer.handleMessage; ids:', ids);
+    }
+
+    if (!ids || !ids.length) return;
 
     _.each(ids, function (id) {
         var oldDoc = this.docs[id],
@@ -137,7 +146,7 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         if (message.method === 'insert') {
             newDoc = _.extend(message.selector, {_id: id});
-        } else if (message.withoutMongo) {
+        } else if (message.withoutMongo && message.method !== 'remove') {
             newDoc = RPS._modifyDoc(_.extend(oldDoc || {_id: id}), message.modifier);
         }
 
