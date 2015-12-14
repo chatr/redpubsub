@@ -38,4 +38,8 @@ RPS.publish = function (sub, requests) {
             handler.stop();
         });
     });
+
+    var docs = _.pluck(handlers, 'docs');
+
+    return docs.length > 1 ? docs : docs[0];
 };
