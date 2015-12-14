@@ -3,11 +3,12 @@ RPS.write = function (collection, method, options) {
         config = RPS.config[collectionName] || {},
         channels, idMap, docs, fields;
 
-    console.log('RPS.write; collectionName, method, options, config:', collectionName, method, options, config);
+    //console.log('RPS.write; collectionName, method, options, config:', collectionName, method, options, config);
 
     var publish = function (res) {
+        console.log('RPS.write → publish; channels:', channels);
         if (channels) {
-            console.log('RPS.write → ready to notify Redis; res:', res);
+            //console.log('RPS.write → ready to notify Redis; res:', res);
 
             var id = idMap || options.selector._id;
 
@@ -26,7 +27,7 @@ RPS.write = function (collection, method, options) {
                 messageString = JSON.stringify(message);
 
             _.each(_.isArray(channels) ? channels : [channels], function (channel) {
-                console.log('RPS.write → publish to Redis; channel, message:', channel, messageString);
+                //console.log('RPS.write → publish to Redis; channel, message:', channel, messageString);
                 if (channel) {
                     RPS._messenger.onMessage(channel, message);
                     RPS._pub(channel, messageString);
@@ -48,7 +49,7 @@ RPS.write = function (collection, method, options) {
         var existedFields = _.union(_.keys(options.selector), _.keys(options.fields)),
             missedFields = _.difference(fetchFields, existedFields);
 
-        console.log('RPS.write; _.keys(options.fields), existedFields, missedFields:', _.keys(options.fields), existedFields, missedFields);
+        //console.log('RPS.write; _.keys(options.fields), existedFields, missedFields:', _.keys(options.fields), existedFields, missedFields);
 
         if ((missedFields.length && channelsIsFunction) || !options.selector._id || !_.isString(options.selector._id)) {
             var findOptions = {fields: {}};
@@ -84,7 +85,10 @@ RPS.write = function (collection, method, options) {
     var callback = _.last(_.toArray(arguments)),
         async = _.isFunction(callback);
 
+    //console.log('RPS.write; channels, async:', channels, async);
+
     if (async && !options.withoutMongo) {
+        //console.log('RPS.write → async && !options.withoutMongo');
         return RPS._write(collection, method, options, function (err, res) {
             if (!err) {
                 publish(res);
@@ -92,6 +96,8 @@ RPS.write = function (collection, method, options) {
             (callback)(err, res);
         });
     } else {
-        return publish(!options.withoutMongo && RPS._write(collection, method, options));
+        var res = !options.withoutMongo && RPS._write(collection, method, options);
+        //console.log('RPS.write → before publish; res:', res);
+        return publish(res);
     }
 };

@@ -1,7 +1,7 @@
 RPS._observers = {};
 
 RPS.observeChanges = function (collection, options, callbacks) {
-    console.log('RPS.observeChanges');
+    //console.log('RPS.observeChanges');
     var listenerId = Random.id(),
         collectionName = collection._name,
         cursorDescription = {
@@ -24,7 +24,7 @@ RPS.observeChanges = function (collection, options, callbacks) {
 };
 
 RPS._observer = function (collection, options, key) {
-    console.log('RPS._observer');
+    //console.log('RPS._observer');
 
     this.collection = collection;
     this.options = options;
@@ -55,7 +55,7 @@ RPS._observer = function (collection, options, key) {
 // initialize, subscribe to channel
 RPS._observer.prototype.initialize = function () {
     if (this.initialized) return;
-    console.log('RPS._observer.initialize');
+    //console.log('RPS._observer.initialize');
 
     RPS._messenger.addObserver(this.key, this.channel);
 
@@ -64,7 +64,7 @@ RPS._observer.prototype.initialize = function () {
 
 RPS._observer.prototype.addListener = function (listenerId, callbacks) {
     if (_.isEmpty(callbacks)) return;
-    console.log('RPS._observer.addListener; listenerId:', listenerId);
+    //console.log('RPS._observer.addListener; listenerId:', listenerId);
     this.listeners[listenerId] = callbacks;
     this.pause();
     this.initialFetch();
@@ -73,15 +73,15 @@ RPS._observer.prototype.addListener = function (listenerId, callbacks) {
 };
 
 RPS._observer.prototype.callListeners = function (action, id, fields) {
-    console.log('RPS._observer.callListeners');
+    //console.log('RPS._observer.callListeners');
     _.each(this.listeners, function (callbacks, listenerId) {
-        console.log('RPS._observer.callListeners; listenerId, action, id, fields:', listenerId, action, id, fields);
+        //console.log('RPS._observer.callListeners; listenerId, action, id, fields:', listenerId, action, id, fields);
         callbacks[action](id, fields);
     }, this);
 };
 
 RPS._observer.prototype.removeListener = function (listenerId) {
-    console.log('RPS._observer.removeListener; listenerId:', listenerId);
+    //console.log('RPS._observer.removeListener; listenerId:', listenerId);
     delete this.listeners[listenerId];
     if (_.isEmpty(this.listeners)) {
         this.kill();
@@ -90,7 +90,7 @@ RPS._observer.prototype.removeListener = function (listenerId) {
 
 RPS._observer.prototype.initialFetch = function () {
     if (this.initiallyFetched) return;
-    console.log('RPS._observer.initialFetch');
+    //console.log('RPS._observer.initialFetch');
 
     var docs = this.collection.find(this.selector, this.findOptions).fetch();
 
@@ -102,7 +102,7 @@ RPS._observer.prototype.initialFetch = function () {
 };
 
 RPS._observer.prototype.initialAdd = function (listenerId) {
-    console.log('RPS._observer.initialAdd; listenerId:', listenerId);
+    //console.log('RPS._observer.initialAdd; listenerId:', listenerId);
 
     var callbacks = this.listeners[listenerId];
 
@@ -113,7 +113,7 @@ RPS._observer.prototype.initialAdd = function (listenerId) {
 
 RPS._observer.prototype.onMessage = function (message) {
     if (!this.initiallyFetched) return;
-    console.log('RPS._observer.onMessage; message:', message);
+    //console.log('RPS._observer.onMessage; message:', message);
 
     if (this.paused) {
         this.messageQueue.push(message);
@@ -123,7 +123,7 @@ RPS._observer.prototype.onMessage = function (message) {
 };
 
 RPS._observer.prototype.handleMessage = function (message) {
-    this.pause();
+    //this.pause();
     console.log('RPS._observer.handleMessage; message:', message);
     var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
         ids = _.isArray(message.id) ? message.id : [message.id];
@@ -138,10 +138,10 @@ RPS._observer.prototype.handleMessage = function (message) {
         if (message.method === 'insert') {
             newDoc = _.extend(message.selector, {_id: id});
         } else if (message.withoutMongo) {
-            newDoc = RPS._modifyDoc(_.extend(oldDoc || {}, {_id: id}), message.modifier);
+            newDoc = RPS._modifyDoc(_.extend(oldDoc || {_id: id}), message.modifier);
         }
 
-        console.log('RPS._observer.handleMessage; newDoc:', newDoc);
+        //console.log('RPS._observer.handleMessage; newDoc:', newDoc);
 
         var needToFetch = !newDoc && (!knownId || !isSimpleModifier) && isRightId && message.method !== 'remove';
 
@@ -153,10 +153,10 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         var dokIsOk = newDoc && isRightId && (message.withoutMongo || needToFetch || _.contains(rightIds, id) || this.collection.find(_.extend({}, this.selector, {_id: id}), this.quickFindOptions).count());
 
-        console.log('RPS._observer.handleMessage; _.isEqual(newDoc, oldDoc):', _.isEqual(newDoc, oldDoc));
-        console.log('RPS._observer.handleMessage; newDoc:', newDoc);
-        console.log('RPS._observer.handleMessage; oldDoc:', oldDoc);
-        console.log('RPS._observer.handleMessage; dokIsOk:', dokIsOk);
+        //console.log('RPS._observer.handleMessage; _.isEqual(newDoc, oldDoc):', _.isEqual(newDoc, oldDoc));
+        //console.log('RPS._observer.handleMessage; newDoc:', newDoc);
+        //console.log('RPS._observer.handleMessage; oldDoc:', oldDoc);
+        //console.log('RPS._observer.handleMessage; dokIsOk:', dokIsOk);
 
         if (message.method !== 'remove' && dokIsOk) {
             // added or changed
@@ -170,10 +170,10 @@ RPS._observer.prototype.handleMessage = function (message) {
                 fields = newDoc;
             }
 
-            console.log('RPS._observer.handleMessage; fields:', fields);
+            //console.log('RPS._observer.handleMessage; fields:', fields);
 
             // todo: filter fields for changes
-            this.callListeners(action, id, fields);
+            this.callListeners(action, id, this.projectionFn(fields));
 
             this.docs[id] = newDoc;
         } else if (knownId) {
@@ -199,16 +199,16 @@ RPS._observer.prototype.handleMessage = function (message) {
         }
     }, this);
 
-    this.resume();
+    //this.resume();
 };
 
 RPS._observer.prototype.pause = function () {
-    console.log('RPS._observer.pause');
+    //console.log('RPS._observer.pause');
     this.paused = true;
 };
 
 RPS._observer.prototype.resume = function () {
-    console.log('RPS._observer.resume');
+    //console.log('RPS._observer.resume');
     while (this.messageQueue.length) {
         this.handleMessage(this.messageQueue.shift());
     }
@@ -218,7 +218,7 @@ RPS._observer.prototype.resume = function () {
 // kill, unsubscribe
 RPS._observer.prototype.kill = function () {
     if (!this.initialized) return;
-    console.log('RPS._observer.kill');
+    //console.log('RPS._observer.kill');
 
     RPS._messenger.removeObserver(this.key);
     delete RPS._observers[this.key];

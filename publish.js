@@ -8,19 +8,19 @@ RPS.publish = function (sub, requests) {
     _.each(requests, function (request, i) {
         var collectionName = request.collection._name;
 
-        console.log('RPS.publish → observeChanges; collectionName:', collectionName);
+        //console.log('RPS.publish → observeChanges; collectionName:', collectionName);
 
         var handler = RPS.observeChanges(request.collection, request.options, {
             added: function (id, fields) {
-                console.log('RPS.publish.added; request.options._name, collectionName, id, fields:', request.options._name, collectionName, id, fields);
+                //console.log('RPS.publish.added; request.options._name, collectionName, id, fields:', request.options._name, collectionName, id, fields);
                 sub.added(collectionName, id, fields);
             },
             changed: function (id, fields) {
-                console.log('RPS.publish.changed; request.options._name, collectionName, id, fields:', request.options._name, collectionName, id, fields);
+                //console.log('RPS.publish.changed; request.options._name, collectionName, id, fields:', request.options._name, collectionName, id, fields);
                 sub.changed(collectionName, id, fields);
             },
             removed: function (id) {
-                console.log('RPS.publish.removed; request.options._name, collectionName, id:', request.options._name, collectionName, id);
+                //console.log('RPS.publish.removed; request.options._name, collectionName, id:', request.options._name, collectionName, id);
                 sub.removed(collectionName, id);
             }
         });
@@ -28,7 +28,7 @@ RPS.publish = function (sub, requests) {
         handlers.push(handler);
 
         if (i >= length - 1) {
-            console.log('RPS.publish → ready; i:', i);
+            //console.log('RPS.publish → ready; i:', i);
             sub.ready();
         }
     });

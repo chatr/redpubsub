@@ -3,9 +3,9 @@ var channels = {},
 
 RPS._messenger = {
     addObserver: function (observerKey, channel) {
-        console.log('RPS._messenger.addObserver; observerKey, channel:', observerKey, channel);
+        //console.log('RPS._messenger.addObserver; observerKey, channel:', observerKey, channel);
         if (!channels[channel]) {
-            console.log('RPS._messenger.addObserver → add channel; channel:', channel);
+            //console.log('RPS._messenger.addObserver → add channel; channel:', channel);
             channels[channel] = {};
         }
 
@@ -15,12 +15,12 @@ RPS._messenger = {
         RPS._sub(channel);
     },
     removeObserver: function (observerKey) {
-        console.log('RPS._messenger.removeObserver; observerKey:', observerKey);
+        //console.log('RPS._messenger.removeObserver; observerKey:', observerKey);
         var channel = observers[observerKey];
         if (channel) {
             delete channels[channel][observerKey];
             if (_.isEmpty(channels[channel])) {
-                console.log('RPS._messenger.removeObserver → remove channel; channel:', channel);
+                //console.log('RPS._messenger.removeObserver → remove channel; channel:', channel);
                 RPS._unsub(channel);
                 delete channels[channel];
             }
