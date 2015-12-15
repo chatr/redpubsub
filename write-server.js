@@ -87,7 +87,7 @@ RPS.write = function (collection, method, options) {
 
     //console.log('RPS.write; channels, async:', channels, async);
 
-    if (async && !options.withoutMongo) {
+    if (async && !options.withoutMongo && !options.noWrite) {
         //console.log('RPS.write → async && !options.withoutMongo');
         return RPS._write(collection, method, options, function (err, res) {
             if (!err) {
@@ -96,7 +96,7 @@ RPS.write = function (collection, method, options) {
             (callback)(err, res);
         });
     } else {
-        var res = !options.withoutMongo && RPS._write(collection, method, options);
+        var res = !options.withoutMongo && !options.noWrite && RPS._write(collection, method, options);
         //console.log('RPS.write → before publish; res:', res);
         return publish(res);
     }

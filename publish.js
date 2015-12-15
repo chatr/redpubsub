@@ -6,7 +6,7 @@ RPS.publish = function (sub, requests) {
         handlers = [];
 
     _.each(requests, function (request, i) {
-        var collectionName = request.collection._name;
+        var collectionName = request.collectionName || request.collection._name;
 
         //console.log('RPS.publish → observeChanges; collectionName:', collectionName);
 

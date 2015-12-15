@@ -59,7 +59,7 @@ RPS._deepExtend = function (dest) {
                 //console.log('RPS._deepExtend; _.isObject(value):', _.isObject(value));
                 if (RPS._isPlainObject(dest[key]) && !value.__RPS__cancelDeepExtend) {
                     //console.log('RPS._deepExtend → RPS._deepExtend');
-                    RPS._deepExtend(dest[key], value);
+                    dest[key] = RPS._deepExtend({}, dest[key], value);
                 } else {
                     delete value.__RPS__cancelDeepExtend;
                     dest[key] = value;
