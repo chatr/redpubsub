@@ -6,7 +6,7 @@ var createRedisClient = function (conf, logLabel) {
 
     logLabel = 'RPS: [' + logLabel + '] ';
 
-    //console.info(logLabel + 'connecting to Redis...', redisConfToString(conf));
+    console.info(logLabel + 'connecting to Redis...', redisConfToString(conf));
 
     var client = Redis.createClient(conf.port, conf.host, {
         retry_max_delay: 1000 * 30
@@ -23,32 +23,32 @@ var createRedisClient = function (conf, logLabel) {
     }
 
     client.on('error', function (err) {
-        //console.error(logLabel + err.toString())
+        console.error(logLabel + err.toString())
     });
 
     client.on('connect', function () {
-        //console.info(logLabel + 'connected to Redis!');
+        console.info(logLabel + 'connected to Redis!');
     });
 
     client.on('reconnecting', function () {
-        //console.info(logLabel + 'reconnecting to Redis...');
+        console.info(logLabel + 'reconnecting to Redis...');
     });
 
     client.on('subscribe', function (channel, count) {
-        //console.info(logLabel + 'subscribed to "' +  channel + '"' + ' (' + count + ')');
+        console.info(logLabel + 'subscribed to "' +  channel + '"' + ' (' + count + ')');
     });
 
     client.on('unsubscribe', function (channel, count) {
-        //console.info(logLabel + 'unsubscribed from "' +  channel + '"' + ' (' + count + ')');
+        console.info(logLabel + 'unsubscribed from "' +  channel + '"' + ' (' + count + ')');
     });
 
     client.on('message', Meteor.bindEnvironment(function (channel, messageString) {
-        //console.info(logLabel + channel + ': ' + messageString);
+        console.info(logLabel + channel + ': ' + messageString);
         var message;
         try {
             message = JSON.parse(messageString);
         } catch (err) {
-            //console.error(logLabel + 'bad message: ' + channel + ': ' + messageString, err.toString());
+            console.error(logLabel + 'bad message: ' + channel + ': ' + messageString, err.toString());
         }
 
         if (message && message._serverId !== RPS._serverId) {

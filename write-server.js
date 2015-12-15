@@ -93,7 +93,7 @@ RPS.write = function (collection, method, options) {
             if (!err) {
                 publish(res);
             }
-            (callback)(err, res);
+            callback(err, res);
         });
     } else {
         var res = !options.withoutMongo && !options.noWrite && RPS._write(collection, method, options);

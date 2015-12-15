@@ -28,10 +28,11 @@ RPS._messenger = {
         delete observers[observerKey];
     },
     onMessage: function (channel, message) {
+        //console.log('RPS._messenger.onMessage; channel, message:', channel, message);
         _.each(channels[channel], function (flag, observerKey) {
             var observer = RPS._observers[observerKey];
             if (observer) {
-                observer.onMessage(_._deepExtend({}, message));
+                observer.onMessage(EJSON.clone(message));
             }
         });
     }
