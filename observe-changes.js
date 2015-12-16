@@ -130,6 +130,14 @@ RPS._observer.prototype.onMessage = function (message) {
 RPS._observer.prototype.handleMessage = function (message, noPause) {
     //noPause || this.pause();
 
+    // fight against race condition
+    var badTS = this.lastTS >= message.ts;
+    this.lastTS = badTS ? this.lastTS : message.ts;
+
+    if (badTS) {
+        console.warn('RPS: RACE CONDITION!');
+    }
+
     //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
     var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
         ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
@@ -163,19 +171,16 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
             } catch (e) {}
         }
 
-        //console.log('RPS._observer.handleMessage; newDoc:', newDoc);
-
-        var needToFetch = !newDoc && !knownId && isRightId && message.method !== 'remove';
-
-        if (!newDoc && oldDoc && _.contains(['update', 'upsert'], message.method) && isRightId) {
+        if (!newDoc && oldDoc && _.contains(['update', 'upsert'], message.method) && isRightId && !badTS) {
             try {
                 newDoc = EJSON.clone(oldDoc);
                 LocalCollection._modify(newDoc, message.modifier);
-                needToFetch = false;
             } catch (e) {}
         }
 
-        //console.log('RPS._observer.handleMessage; needToFetch:', needToFetch);
+        var needToFetch = !newDoc && isRightId && message.method !== 'remove';
+
+        //console.log('RPS._observer.handleMessage; this.collection._name, badTS, needToFetch:', this.collection._name, badTS, needToFetch);
 
         if (needToFetch) {
             newDoc = this.collection.findOne({_id: id}, this.findOptions);
@@ -200,7 +205,6 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
                 _.extend(newDoc, _.omit(this.options.docsMixin, fieldsFromModifier));
             }
 
-
             // added or changed
             var action, fields;
 
@@ -212,13 +216,16 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
                 fields = newDoc;
             }
 
-            //console.log('RPS._observer.handleMessage; action, id, fields, this.projectionFn(fields), this.selector:', action, id, fields, this.projectionFn(fields), this.selector);
+            var finalFields = this.projectionFn(fields);
+            //console.log('RPS._observer.handleMessage; action, id, fields, finalFields, this.selector:', action, id, fields, finalFields, this.selector);
 
-            // todo: filter fields for changes
-            this.callListeners(action, id, this.projectionFn(fields));
+            if (!_.isEmpty(finalFields)) {
+                this.callListeners(action, id, this.projectionFn(fields));
+            }
 
             this.docs[id] = newDoc;
         } else if (knownId) {
+            //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
             this.callListeners('removed', id);
             delete this.docs[id];

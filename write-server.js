@@ -1,7 +1,8 @@
 RPS.write = function (collection, method, options) {
     var collectionName = collection._name,
         config = RPS.config[collectionName] || {},
-        channels, idMap, docs, fields;
+        channels, idMap, docs, fields,
+        ts = Date.now();
 
     //console.log('RPS.write; collectionName, method, options, config:', collectionName, method, options, config);
 
@@ -19,9 +20,10 @@ RPS.write = function (collection, method, options) {
             var message = {
                     _serverId: RPS._serverId,
                     selector: options.selector,
-                    modifier: options.modifier,
+                    modifier: options.redModifier || options.modifier,
                     method: method,
                     withoutMongo: options.withoutMongo,
+                    ts: ts,
                     id: id
                 },
                 messageString = JSON.stringify(message);
@@ -30,7 +32,10 @@ RPS.write = function (collection, method, options) {
                 //console.log('RPS.write → publish to Redis; channel, message:', channel, messageString);
                 if (channel) {
                     RPS._messenger.onMessage(channel, message);
-                    RPS._pub(channel, messageString);
+
+                    ////Meteor.setTimeout(function () {
+                        RPS._pub(channel, messageString);
+                    ////}, _.random(0, 1000));  // simulate race condition
                 }
             });
         }
