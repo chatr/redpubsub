@@ -61,7 +61,7 @@ var createRedisClient = function (conf, key, revive) {
     });
 
     client.on('message', Meteor.bindEnvironment(function (channel, messageString) {
-        console.info(logLabel + channel + ': ' + messageString);
+        //console.log(logLabel + channel + ': ' + messageString);
         var message;
         try {
             message = JSON.parse(messageString);

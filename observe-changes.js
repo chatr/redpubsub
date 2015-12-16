@@ -130,7 +130,7 @@ RPS._observer.prototype.onMessage = function (message) {
 RPS._observer.prototype.handleMessage = function (message, noPause) {
     //noPause || this.pause();
 
-    console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
+    //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
     var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
         ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
 
@@ -149,7 +149,6 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
     _.each(ids, function (id) {
         var oldDoc = this.docs[id],
             knownId = !!oldDoc,
-            isSimpleModifier = RPS._isSimpleModifier(message.modifier),
             isRightId = !rightIds || _.contains(rightIds, id),
             newDoc;
 
@@ -158,19 +157,28 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
         if (message.method === 'insert') {
             newDoc = _.extend(message.selector, {_id: id});
         } else if (message.withoutMongo && message.method !== 'remove') {
-            newDoc = _.extend({_id: id}, oldDoc);
-            LocalCollection._modify(newDoc, message.modifier);
+            try {
+                newDoc = _.extend({_id: id}, oldDoc);
+                LocalCollection._modify(newDoc, message.modifier);
+            } catch (e) {}
         }
 
         //console.log('RPS._observer.handleMessage; newDoc:', newDoc);
 
-        var needToFetch = !newDoc && (!knownId || !isSimpleModifier) && isRightId && message.method !== 'remove';
+        var needToFetch = !newDoc && !knownId && isRightId && message.method !== 'remove';
+
+        if (!newDoc && oldDoc && _.contains(['update', 'upsert'], message.method) && isRightId) {
+            try {
+                newDoc = EJSON.clone(oldDoc);
+                LocalCollection._modify(newDoc, message.modifier);
+                needToFetch = false;
+            } catch (e) {}
+        }
+
+        //console.log('RPS._observer.handleMessage; needToFetch:', needToFetch);
 
         if (needToFetch) {
             newDoc = this.collection.findOne({_id: id}, this.findOptions);
-        } else if (!newDoc && oldDoc && _.contains(['update', 'upsert'], message.method)) {
-            newDoc = EJSON.clone(oldDoc);
-            LocalCollection._modify(newDoc, message.modifier);
         }
 
         var dokIsOk = newDoc && isRightId && (message.withoutMongo || needToFetch || _.contains(rightIds, id) || this.collection.find(_.extend({}, this.selector, {_id: id}), this.quickFindOptions).count());
@@ -181,7 +189,9 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
 
         if (message.method !== 'remove' && dokIsOk) {
             if (this.options.docsMixin) {
-                var fieldsFromModifier;
+                var fieldsFromModifier,
+                    isSimpleModifier = RPS._isSimpleModifier(message.modifier);
+
                 if (isSimpleModifier === 'NO_OPERATORS') {
                     fieldsFromModifier = _.keys(message.modifier)
                 } else if (isSimpleModifier === 'ONLY_SETTERS') {
