@@ -6,7 +6,7 @@ RPS.write = function (collection, method, options) {
     //console.log('RPS.write; collectionName, method, options, config:', collectionName, method, options, config);
 
     var publish = function (res) {
-        console.log('RPS.write → publish; channels:', channels);
+        //console.log('RPS.write → publish; channels:', channels);
         if (channels) {
             //console.log('RPS.write → ready to notify Redis; res:', res);
 
@@ -57,7 +57,7 @@ RPS.write = function (collection, method, options) {
                 findOptions.fields[fieldName] = 1;
             });
 
-            console.log('RPS.write → FETCH DOCS FROM DB; options.selector, fields:', options.selector, findOptions);
+            //console.log('RPS.write → FETCH DOCS FROM DB; options.selector, fields:', options.selector, findOptions);
             docs = collection.find(options.selector, findOptions).fetch();
             idMap = _.pluck(docs, '_id');
             if (idMap.length === 1) {

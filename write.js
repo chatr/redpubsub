@@ -1,5 +1,5 @@
 RPS._write = function (collection, method, options, callback) {
-    console.log('RPS._write');
+    //console.log('RPS._write');
     switch (method) {
         case 'insert':
         case 'remove':
