@@ -136,12 +136,12 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
 
     //console.log('RPS._observer.handleMessage; message.withoutMongo, ids:', message.withoutMongo, ids);
     if (message.withoutMongo && !ids) {
-        console.log('RPS._observer.handleMessage; this.docs, message.selector:', this.docs, message.selector);
+        //console.log('RPS._observer.handleMessage; this.docs, message.selector:', this.docs, message.selector);
         var matcher = new Minimongo.Matcher(message.selector);
         ids = _.pluck(_.filter(this.docs, function (doc) {
             return matcher.documentMatches(doc).result;
         }), '_id');
-        console.log('RPS._observer.handleMessage; ids:', ids);
+        //console.log('RPS._observer.handleMessage; ids:', ids);
     }
 
     if (!ids || !ids.length) return;
@@ -162,7 +162,7 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
             LocalCollection._modify(newDoc, message.modifier);
         }
 
-        console.log('RPS._observer.handleMessage; newDoc:', newDoc);
+        //console.log('RPS._observer.handleMessage; newDoc:', newDoc);
 
         var needToFetch = !newDoc && (!knownId || !isSimpleModifier) && isRightId && message.method !== 'remove';
 

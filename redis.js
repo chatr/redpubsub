@@ -1,15 +1,16 @@
 RPS._serverId = Random.id();
 
 var Redis = Npm.require('redis');
-var createRedisClient = function (conf, logLabel) {
+var createRedisClient = function (conf, key, revive) {
     conf = conf || {};
 
-    logLabel = 'RPS: [' + logLabel + '] ';
+    var logLabel = 'RPS: [' + key + '] ',
+        needToResubscribe = revive;
 
     console.info(logLabel + 'connecting to Redis...', redisConfToString(conf));
 
     var client = Redis.createClient(conf.port, conf.host, {
-        retry_max_delay: 1000 * 30
+        retry_max_delay: 1000 * 10
     });
 
     if (conf.auth) {
@@ -28,10 +29,27 @@ var createRedisClient = function (conf, logLabel) {
 
     client.on('connect', function () {
         console.info(logLabel + 'connected to Redis!');
+        if (needToResubscribe) {
+            resubscribe();
+            needToResubscribe = false;
+        }
     });
 
     client.on('reconnecting', function () {
         console.info(logLabel + 'reconnecting to Redis...');
+    });
+
+    /*client.on('idle', function () {
+        console.info(logLabel + 'idle');
+    });
+
+    client.on('drain', function () {
+        console.info(logLabel + 'drain');
+    });*/
+
+    client.on('end', function () {
+        console.error(logLabel + 'end of the Redis? No... Will try to revive!');
+        reviveСlient(key);
     });
 
     client.on('subscribe', function (channel, count) {
@@ -93,17 +111,32 @@ var redisConfToString = function (conf) {
 };
 
 var redisConfig = parseRedisEnvUrl() || {};
-var pubClient = createRedisClient(redisConfig, 'pub client');
-var subClient = createRedisClient(redisConfig, 'sub client');
+
+var clients = {
+    pub: createRedisClient(redisConfig, 'pub'),
+    sub: createRedisClient(redisConfig, 'sub')
+};
 
 RPS._sub = function (channel) {
-    subClient.subscribe(channel);
+    clients.sub.subscribe(channel);
 };
 
 RPS._unsub = function (channel) {
-    subClient.unsubscribe(channel);
+    clients.sub.unsubscribe(channel);
 };
 
 RPS._pub = function (channel, message) {
-    pubClient.publish(channel, message);
+    clients.pub.publish(channel, message);
+};
+
+var reviveСlient = function (key) {
+    clients[key] = createRedisClient(redisConfig, key, true);
+};
+
+var resubscribe = function () {
+    console.info('RPS: resubscribe');
+    _.each(RPS._messenger.channels, function (observerKeys, channel) {
+        console.info('RPS: resubscribe to channel: ' + channel);
+        RPS._sub(channel);
+    });
 };
