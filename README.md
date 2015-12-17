@@ -167,7 +167,3 @@ var handler = RPS.observeChanges(Hits, {selector: {siteId: siteId}, options: {fi
 // stop it when you need:
 // handler.stop();
 ```
-
----
-
-
