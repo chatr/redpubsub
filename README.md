@@ -1,5 +1,6 @@
 # Redpubsub
 
+## Story
 Custom pub/sub system that works through channels
 (so we avoid that every oplog change hits every Meteor instance
 creating an exponential scaling problem). It use Redis to communicate between Meteor processes.
@@ -10,7 +11,23 @@ This package implement custom APIs for:
 
 Most of the performance improvement comes from the fact that we split changes into separate channels, so server publications only need to process changes from channels they are interested in, instead of every single change as is the case in Meteor by default. Also it fetches DB as less as possible, every observer receives `method`, `selector`, and `modifer` and tries to modify docs right in the memory. It does fetch in the case of uncertainty that the operation will be accurate (complicated modifer, race condition, limit, skip, or sort options). Of course redpubsub subscriptions reuse observers with the same options and observers reuse Redis channels.
 
-## RPS.write(collection, methodName, [options], [callback]) _(anywere)_
+This all works well at [Chatra](https://chatra.io/). Performance improved to a point where we no longer worry about performance (not any time soon at least). Right now ≈300 active sessions give about 5% CPU usage on a single machine, before this update ≈150 sessions cost us about 75% of CPU.
+
+## Installation
+
+```
+meteor add chatra:redpubsub
+```
+
+### Redis
+
+This package uses Redis as the communicate channel between nodes. It uses pub/sub functionality of Redis.
+So you need to have redis-server running locally during development and `RPS_REDIS_URL` environment variable in production.
+
+If you are new to redis, [read this guide](http://redis.io/topics/quickstart).
+
+## API
+### RPS.write(collection, methodName, [options], [callback]) _(anywere)_
 
 Insert a doc synchronously:
 ```
@@ -42,7 +59,7 @@ RPS.write(Typings, 'upsert', {
 });
 ```
 
-## RPS.config[collectionName] = options; _(server)_
+### RPS.config[collectionName] = options; _(server)_
 Configure what channel(s) to notify via `RPS.config` object:
 ```
 RPS.config.testCollection = {
@@ -92,7 +109,7 @@ RPS.write(Sessions, 'remove', {
 });
 ```
 
-## RPS.publish(subscription, [request1, request2...]) _(server)_
+### RPS.publish(subscription, [request1, request2...]) _(server)_
 
 Use it inside `Meteor.publish`:
 ```
@@ -132,8 +149,7 @@ Meteor.publish('client', function (clientId) {
 });
 ```
 
-
-## RPS.observeChanges(collection, options, callbacks) _(server)_
+### RPS.observeChanges(collection, options, callbacks) _(server)_
 
 It behaves just like Meteor’s `cursor.observeChange`:
 
@@ -154,4 +170,5 @@ var handler = RPS.observeChanges(Hits, {selector: {siteId: siteId}, options: {fi
 ```
 
 ---
-P. S. This all works well at [Chatra](https://chatra.io/). Performance improved to a point where we no longer worry about performance (not any time soon at least). Right now ≈300 active sessions give about 5% CPU usage on a single machine, before this update ≈150 sessions cost us about 75% of CPU.
+
+
