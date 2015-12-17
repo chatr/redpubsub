@@ -45,6 +45,7 @@ RPS._observer = function (collection, options, key) {
     this.key = key;
     this.listeners = {};
     this.docs = {};
+    this.lastMethods = {};
     this.messageQueue = [];
 
     // You may not filter out _id when observing changes, because the id is a core
@@ -135,7 +136,7 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
     this.lastTS = badTS ? this.lastTS : message.ts;
 
     if (badTS) {
-        console.warn('RPS: RACE CONDITION!');
+        console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
     }
 
     //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
@@ -155,6 +156,16 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
     if (!ids || !ids.length) return;
 
     _.each(ids, function (id) {
+        var lastMethod = this.lastMethods[id];
+        if (badTS
+            && lastMethod
+            && ((message.method !== 'remove' && lastMethod === 'remove') || (message.method === 'remove' && lastMethod !== 'remove'))) {
+            console.warn('RPS: SKIP MESSAGE! All fine already');
+            return;
+        }
+
+        this.lastMethods[id] = message.method;
+
         var oldDoc = this.docs[id],
             knownId = !!oldDoc,
             isRightId = !rightIds || _.contains(rightIds, id),
@@ -220,14 +231,18 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
             //console.log('RPS._observer.handleMessage; action, id, fields, finalFields, this.selector:', action, id, fields, finalFields, this.selector);
 
             if (!_.isEmpty(finalFields)) {
-                this.callListeners(action, id, this.projectionFn(fields));
+                this.callListeners(action, id, finalFields);
+                this.docs[id] = newDoc;
             }
-
-            this.docs[id] = newDoc;
         } else if (knownId) {
             //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
-            this.callListeners('removed', id);
+            try {
+                this.callListeners('removed', id);
+            } catch (e) {
+                // already removed, ignore it
+            }
+
             delete this.docs[id];
         }
 
@@ -235,7 +250,11 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
             // remove irrelevant docs
             var idMap = _.keys(this.docs);
             _.each(_.difference(idMap, rightIds), function (id) {
-                this.callListeners('removed', id);
+                try {
+                    this.callListeners('removed', id);
+                } catch (e) {
+                    // already removed, ignore it
+                }
                 delete this.docs[id];
             }, this);
 
