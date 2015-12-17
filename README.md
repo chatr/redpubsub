@@ -10,7 +10,7 @@ This package implement custom APIs for:
 
 Most of the performance improvement comes from the fact that we split changes into separate channels, so server publications only need to process changes from channels they are interested in, instead of every single change as is the case in Meteor by default. Also it fetches DB as less as possible, every observer receives `method`, `selector`, and `modifer` and tries to modify docs right in the memory. It does fetch in the case of uncertainty that the operation will be accurate (complicated modifer, race condition, limit, skip, or sort options). Of course redpubsub subscriptions reuse observers with the same options and observers reuse Redis channels.
 
-This all works well at [Chatra](https://chatra.io/). Performance improved to a point where we no longer worry about performance (not any time soon at least). Right now ≈300 active sessions give about 5% CPU usage on a single machine, before this update ≈150 sessions cost us about 75% of CPU.
+This all works well at [Chatra](https://chatra.io/). Performance improved to a point where we no longer worry about performance (not any time soon at least). Right now ≈300 active sessions give about 5% CPU usage on a single machine, before this implementation ≈150 sessions cost us about 75% of CPU.
 
 ## Installation
 
