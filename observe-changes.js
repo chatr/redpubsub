@@ -135,9 +135,9 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
     var badTS = this.lastTS >= message.ts;
     this.lastTS = badTS ? this.lastTS : message.ts;
 
-    if (badTS) {
-        console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
-    }
+    //if (badTS) {
+    //    console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
+    //}
 
     //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
     var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
@@ -159,8 +159,8 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
         var lastMethod = this.lastMethods[id];
         if (badTS
             && lastMethod
-            && ((message.method !== 'remove' && lastMethod === 'remove') || (message.method === 'remove' && lastMethod !== 'remove'))) {
-            console.warn('RPS: SKIP MESSAGE! All fine already');
+            && ((message.method !== 'remove' && lastMethod === 'remove') || (message.method === 'remove' && _.contains(['insert', 'upsert'], lastMethod)))) {
+            //console.warn('RPS: SKIP MESSAGE! All fine already');
             return;
         }
 
