@@ -1,6 +1,5 @@
 # Redpubsub
 
-## Story
 Custom pub/sub system that works through channels
 (so we avoid that every oplog change hits every Meteor instance
 creating an exponential scaling problem). It use Redis to communicate between Meteor processes.
