@@ -288,10 +288,8 @@ RPS._observer.prototype.resume = function () {
 RPS._observer.prototype.kill = function () {
     if (!this.initialized) return;
     //console.log('RPS._observer.kill');
-
-    RPS._messenger.removeObserver(this.key);
-    delete this.docs;
-    delete RPS._observers[this.key];
-
     this.initialized = false;
+    RPS._messenger.removeObserver(this.key);
+    delete RPS._observers[this.key];
+    //delete this.docs;
 };
