@@ -173,7 +173,7 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
 
         //console.log('RPS._observer.handleMessage; oldDoc, this.selector:', oldDoc, this.selector);
 
-        if (message.method === 'insert') {
+        if (message.method === 'insert' && !badTS) {
             newDoc = _.extend(message.selector, {_id: id});
         } else if (message.withoutMongo && message.method !== 'remove') {
             try {
