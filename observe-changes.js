@@ -29,7 +29,7 @@ RPS._observer = function (collection, options, key) {
     this.collection = collection;
     this.options = options;
     this.selector = options.selector;
-    this.findOptions = options.options || {};
+    this.findOptions = EJSON.clone(options.options) || {};
     this.findOptions.fields = this.findOptions.fields || {};
     this.needToFetchAlways = this.findOptions.limit || this.findOptions.sort;
     this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
@@ -69,9 +69,8 @@ RPS._observer.prototype.initialize = function () {
 };
 
 RPS._observer.prototype.addListener = function (listenerId, callbacks) {
-    if (_.isEmpty(callbacks)) return;
     //console.log('RPS._observer.addListener; listenerId:', listenerId);
-    this.listeners[listenerId] = callbacks;
+    this.listeners[listenerId] = callbacks || {};
     this.pause();
     this.initialFetch();
     this.initialAdd(listenerId);
@@ -82,7 +81,7 @@ RPS._observer.prototype.callListeners = function (action, id, fields) {
     //console.log('RPS._observer.callListeners');
     _.each(this.listeners, function (callbacks, listenerId) {
         //console.log('RPS._observer.callListeners; listenerId, action, id, fields:', listenerId, action, id, fields);
-        callbacks[action](id, fields);
+        callbacks[action] && callbacks[action](id, fields);
     }, this);
 };
 
@@ -112,9 +111,11 @@ RPS._observer.prototype.initialAdd = function (listenerId) {
 
     var callbacks = this.listeners[listenerId];
 
-    _.each(this.docs, function (doc, id) {
-        callbacks.added(id, _.extend(doc, this.options.docsMixin));
-    }, this);
+    if (callbacks.added) {
+        _.each(this.docs, function (doc, id) {
+            callbacks.added(id, _.extend(doc, this.options.docsMixin));
+        }, this);
+    }
 };
 
 RPS._observer.prototype.onMessage = function (message) {
