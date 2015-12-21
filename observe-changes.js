@@ -193,8 +193,9 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
 
         //console.log('RPS._observer.handleMessage; this.collection._name, badTS, needToFetch:', this.collection._name, badTS, needToFetch);
 
+
         if (needToFetch) {
-            newDoc = this.collection.findOne({_id: id}, this.findOptions);
+            newDoc = this.collection.findOne(_.extend({}, this.selector, {_id: id}), this.findOptions);
         }
 
         var dokIsOk = newDoc && isRightId && (message.withoutMongo || needToFetch || _.contains(rightIds, id) || this.collection.find(_.extend({}, this.selector, {_id: id}), this.quickFindOptions).count());
