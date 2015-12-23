@@ -2,11 +2,14 @@ RPS._observers = {};
 
 RPS.observeChanges = function (collection, options, callbacks) {
     //console.log('RPS.observeChanges');
+
+    options = options || {};
+
     var listenerId = Random.id(),
         collectionName = collection._name,
         cursorDescription = {
             collectionName: collectionName,
-            options: _.extend(options || {}, {selector: Mongo.Collection._rewriteSelector(options.selector || {})})
+            options: _.extend(options, {selector: Mongo.Collection._rewriteSelector(options.selector || {})})
         },
         observerKey = JSON.stringify(cursorDescription),
         observer = RPS._observers[observerKey] || (RPS._observers[observerKey] = new RPS._observer(collection, options, observerKey));
@@ -39,7 +42,16 @@ RPS._observer = function (collection, options, key) {
         this.projectionFields[key] = 1;
     }, this);
 
+    console.log('RPS: this.projectionFields:', this.projectionFields);
+
     this.projectionFn = LocalCollection._compileProjection(this.projectionFields);
+
+    try {
+        this.matcher = new Minimongo.Matcher(this.selector);
+        this.findOptions.fields = this.matcher.combineIntoProjection(this.projectionFields);
+    } catch (e) {
+        // ignore
+    }
 
     this.channel = options.channel || collection._name;
     this.key = key;
@@ -147,10 +159,14 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
     //console.log('RPS._observer.handleMessage; message.withoutMongo, ids:', message.withoutMongo, ids);
     if (message.withoutMongo && !ids) {
         //console.log('RPS._observer.handleMessage; this.docs, message.selector:', this.docs, message.selector);
-        var matcher = new Minimongo.Matcher(message.selector);
-        ids = _.pluck(_.filter(this.docs, function (doc) {
-            return matcher.documentMatches(doc).result;
-        }), '_id');
+        try {
+            var matcher = new Minimongo.Matcher(message.selector);
+            ids = _.pluck(_.filter(this.docs, function (doc) {
+                return matcher.documentMatches(doc).result;
+            }), '_id');
+        } catch (e) {
+            // ignore
+        }
         //console.log('RPS._observer.handleMessage; ids:', ids);
     }
 
@@ -199,7 +215,12 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
             newDoc = this.collection.findOne(_.extend({}, this.selector, {_id: id}), this.findOptions);
         }
 
-        var dokIsOk = newDoc && isRightId && (message.withoutMongo || needToFetch || _.contains(rightIds, id) || this.collection.find(_.extend({}, this.selector, {_id: id}), this.quickFindOptions).count());
+        var dokIsOk = newDoc
+            && isRightId
+            && (message.withoutMongo
+                || needToFetch
+                || _.contains(rightIds, id)
+                || (this.matcher ? this.matcher.documentMatches(newDoc).result : this.collection.find(_.extend({}, this.selector, {_id: id}), this.quickFindOptions).count()));
 
         //console.log('RPS._observer.handleMessage; newDoc, this.selector:', newDoc, this.selector);
         //console.log('RPS._observer.handleMessage; dokIsOk, this.selector:', dokIsOk, this.selector);
@@ -211,7 +232,7 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
                     isSimpleModifier = RPS._isSimpleModifier(message.modifier);
 
                 if (isSimpleModifier === 'NO_OPERATORS') {
-                    fieldsFromModifier = _.keys(message.modifier)
+                    fieldsFromModifier = _.keys(message.modifier);
                 } else if (isSimpleModifier === 'ONLY_SETTERS') {
                     fieldsFromModifier = _.union(_.keys(message.modifier.$set || {}), _.keys(message.modifier.$unset || {}));
                 }
