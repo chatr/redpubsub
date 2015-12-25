@@ -42,7 +42,7 @@ RPS._observer = function (collection, options, key) {
         this.projectionFields[key] = 1;
     }, this);
 
-    console.log('RPS: this.projectionFields:', this.projectionFields);
+    //console.log('RPS: this.projectionFields:', this.projectionFields);
 
     this.projectionFn = LocalCollection._compileProjection(this.projectionFields);
 
