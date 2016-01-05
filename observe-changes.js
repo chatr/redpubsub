@@ -109,11 +109,13 @@ RPS._observer.prototype.initialFetch = function () {
     if (this.initiallyFetched) return;
     //console.log('RPS._observer.initialFetch');
 
-    var docs = this.collection.find(this.selector, this.findOptions).fetch();
+    if (!this.options.withoutMongo) {
+        var docs = this.collection.find(this.selector, this.findOptions).fetch();
 
-    _.each(docs, function (doc) {
-        this.docs[doc._id] = doc;
-    }, this);
+        _.each(docs, function (doc) {
+            this.docs[doc._id] = doc;
+        }, this);
+    }
 
     this.initiallyFetched = true;
 };
