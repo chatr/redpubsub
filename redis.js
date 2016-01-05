@@ -48,6 +48,7 @@ var createRedisClient = function (conf, key, revive) {
     });*/
 
     client.on('end', Meteor.bindEnvironment(function () {
+        client.end();
         console.error(logLabel + 'end of the Redis? No... Will try to revive!');
         Meteor.setTimeout(function () {
             reviveСlient(key);
