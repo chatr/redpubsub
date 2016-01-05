@@ -256,8 +256,8 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
             //console.log('RPS._observer.handleMessage; action, id, fields, finalFields, this.selector:', action, id, fields, finalFields, this.selector);
 
             if (!_.isEmpty(finalFields)) {
-                this.callListeners(action, id, finalFields);
                 this.docs[id] = newDoc;
+                this.callListeners(action, id, finalFields);
             }
         } else if (knownId) {
             //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
