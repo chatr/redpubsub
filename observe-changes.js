@@ -153,6 +153,11 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
     //if (badTS) {
     //    console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
     //}
+    
+    //If a message skips Mongo, it wont have any ID, yet the routien that follows relies on it. Forcing the issue for now.
+    if (message.withoutMongo && !message.id) {
+        message.id = message.ts + message._serverId;
+    }
 
     //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
     var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
