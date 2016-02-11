@@ -63,7 +63,7 @@ var createRedisClient = function (conf, key, revive) {
         console.info(logLabel + 'unsubscribed from "' +  channel + '"' + ' (' + count + ')');
     });
 
-    client.on('message', Meteor.bindEnvironment(function (channel, messageString) {
+    client.on('message', function (channel, messageString) {
         //console.log(logLabel + channel + ': ' + messageString);
         var message;
         try {
@@ -73,9 +73,9 @@ var createRedisClient = function (conf, key, revive) {
         }
 
         if (message && message._serverId !== RPS._serverId) {
-            RPS._messenger.onMessage(channel, message);
+            RPS._messenger.onMessageFromRedis(channel, message);
         }
-    }));
+    });
 
     return client;
 };

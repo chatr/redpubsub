@@ -56,7 +56,7 @@ RPS.write = function (collection, method, options) {
 
         //console.log('RPS.write; _.keys(options.fields), existedFields, missedFields:', _.keys(options.fields), existedFields, missedFields);
 
-        if ((missedFields.length && channelsIsFunction) || !options.selector._id || !_.isString(options.selector._id)) {
+        if ((missedFields.length && channelsIsFunction) || !LocalCollection._selectorIsId(options.selector._id)) {
             var findOptions = {fields: {}};
             _.each(missedFields.length ? missedFields : ['_id'], function (fieldName) {
                 findOptions.fields[fieldName] = 1;

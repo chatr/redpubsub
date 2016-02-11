@@ -36,3 +36,5 @@ RPS._messenger = {
         });
     }
 };
+
+RPS._messenger.onMessageFromRedis = Meteor.bindEnvironment(RPS._messenger.onMessage);
