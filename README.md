@@ -14,7 +14,7 @@ This all works well at [Chatra](https://chatra.io/). Performance improved to a p
 
 ## Installation
 
-```
+```bash
 meteor add chatra:redpubsub
 ```
 
@@ -29,7 +29,7 @@ If you are new to redis, [read this guide](http://redis.io/topics/quickstart).
 ### RPS.write(collection, methodName, [options], [callback]) _(server & client simulation)_
 
 Insert a doc synchronously:
-```
+```js
 var newMessageId = RPS.write(Messages, 'insert', {
     doc: {
       message: messageString,
@@ -40,7 +40,7 @@ var newMessageId = RPS.write(Messages, 'insert', {
 ```
 
 Update asynchronously (callback is passed):
-```
+```js
 RPS.write(Messages, 'update', {
     selector: {_id: messageId},
     modifier: {$set: {message: messageString, updated: true}}
@@ -50,7 +50,7 @@ RPS.write(Messages, 'update', {
 ```
 
 Send ephemeral DB-less typing signal to listeners:
-```
+```js
 RPS.write(Typings, 'upsert', {
     selector: {_id: clientId},
     modifier: {$set: {isTyping: true}},
@@ -62,14 +62,14 @@ Note that if you call `RPS.write` only on the client (outside universal methods 
 
 ### RPS.config[collectionName] = options; _(server)_
 Configure what channel(s) to notify via `RPS.config` object:
-```
+```js
 RPS.config.testCollection = {
   channels: ['testCollection', 'anotherStaticChannel']
 }
 ```
 
 Find right channel dinamically:
-```
+```js
 RPS.config.Clients = {
   channels: function (selector) {
     return 'clientById:' + selector._id;
@@ -80,7 +80,7 @@ RPS.config.Clients = {
 Note that `selector` in above example is take from `RPS.write` call.
 
 If you need more fields to compute the chanell name you can ask to fetch it from DB via `fetchFields` option and receive in `fields` arguments:
-```
+```js
 RPS.config.Clients = {
   fetchFields: ['hostId'],
   channels: function (selector, fields) {
@@ -90,7 +90,7 @@ RPS.config.Clients = {
 ```
 
 Note that `fields.hostId` can be a single value or an array of ids if docs that match your `selector` have a different values. So a real config will look like:
-```
+```js
 RPS.config.Transactions = {
     fetchFields: ['hostId'],
     channels: function (selector, fields) {
@@ -103,7 +103,7 @@ RPS.config.Transactions = {
 ```
 
 If don’t want to make an extra fetch, pass needed `fields` when calling `RPS.write`:
-```
+```js
 RPS.write(Sessions, 'remove', {
     selector: {_id: session._id},
     fields: {userId: session.userId}
@@ -113,7 +113,7 @@ RPS.write(Sessions, 'remove', {
 ### RPS.publish(subscription, [request1, request2...]) _(server)_
 
 Use it inside `Meteor.publish`:
-```
+```js
 Meteor.publish('messages', function (clientId) {
     RPS.publish(this, {
         collection: Messages,
@@ -129,7 +129,7 @@ Meteor.publish('messages', function (clientId) {
 ```
 
 Publish two or more subscriptions:
-```
+```js
 Meteor.publish('client', function (clientId) {
     RPS.publish(this, [
         {
@@ -154,7 +154,7 @@ Meteor.publish('client', function (clientId) {
 
 It behaves just like Meteor’s `cursor.observeChange`:
 
-```
+```js
 var count = 0;
 var handler = RPS.observeChanges(Hits, {selector: {siteId: siteId}, options: {fields: {_id: 1}}}, {
     added: function (id, fields) {
