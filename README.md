@@ -26,7 +26,7 @@ So you need to have redis-server running locally during development and `RPS_RED
 If you are new to redis, [read this guide](http://redis.io/topics/quickstart).
 
 ## API
-### RPS.write(collection, methodName, [options], [callback]) _(anywere)_
+### RPS.write(collection, methodName, [options], [callback]) _(server & client simulation)_
 
 Insert a doc synchronously:
 ```
@@ -57,6 +57,8 @@ RPS.write(Typings, 'upsert', {
     withoutMongo: true // do not touch Mongo at all
 });
 ```
+
+Note that if you call `RPS.write` only on the client (outside universal methods for example) channels will be not notified about the change.
 
 ### RPS.config[collectionName] = options; _(server)_
 Configure what channel(s) to notify via `RPS.config` object:
