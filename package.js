@@ -18,7 +18,7 @@ Npm.depends({
 Package.onUse(function(api) {
   api.versionsFrom('1.2.1');
 
-  api.use(['random', 'underscore', 'ddp-server']);
+  api.use(['random', 'underscore', 'ddp-server', 'ejson']);
   api.use(['minimongo', 'diff-sequence'], 'server');
 
   api.addFiles('namespace.js');
