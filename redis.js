@@ -73,7 +73,7 @@ var createRedisClient = function (conf, key, revive) {
         }
 
         if (message && message._serverId !== RPS._serverId) {
-            RPS._messenger.onMessageFromRedis(channel, message);
+            RPS._messenger.onMessage(channel, message, true);
         }
     });
 

@@ -1,3 +1,5 @@
+var Fiber = Npm.require('fibers');
+
 RPS._messenger = {
     channels: {},
     observers: {},
@@ -26,15 +28,20 @@ RPS._messenger = {
         }
         delete RPS._messenger.observers[observerKey];
     },
-    onMessage: function (channel, message) {
+    onMessage: function (channel, message, runWithFiber) {
         //console.log('RPS._messenger.onMessage; channel, message:', channel, message);
         _.each(RPS._messenger.channels[channel], function (flag, observerKey) {
             var observer = RPS._observers[observerKey];
             if (observer) {
-                observer.onMessage(EJSON.clone(message));
+                var messageClone =  EJSON.clone(message);
+                if (runWithFiber) {
+                    Fiber(function () {
+                        observer.onMessage(messageClone);
+                    }).run();
+                } else {
+                    observer.onMessage(messageClone);
+                }
             }
         });
     }
 };
-
-RPS._messenger.onMessageFromRedis = Meteor.bindEnvironment(RPS._messenger.onMessage);
