@@ -27,13 +27,13 @@ var createRedisClient = function (conf, key, revive) {
         console.error(logLabel + err.toString())
     });
 
-    client.on('connect', Meteor.bindEnvironment(function () {
+    client.on('connect', function () {
         console.info(logLabel + 'connected to Redis!');
         if (needToResubscribe) {
             resubscribe();
             needToResubscribe = false;
         }
-    }));
+    });
 
     client.on('reconnecting', function () {
         console.info(logLabel + 'reconnecting to Redis...');
@@ -133,7 +133,7 @@ RPS._pub = function (channel, message) {
 };
 
 var reviveСlient = function (key) {
-    clients[key] = createRedisClient(redisConfig, key, true);
+    clients[key] = createRedisClient(redisConfig, key, key === 'sub');
 };
 
 var resubscribe = function () {
