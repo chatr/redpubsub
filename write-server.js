@@ -9,14 +9,14 @@ RPS.write = function (collection, method, options) {
         idMap,
         docs;
 
-    console.log('RPS.write; collectionName, method, options:', collectionName, method, options);
+    //console.log('RPS.write; collectionName, method, options:', collectionName, method, options);
 
     var publish = function (doc, id) {
         if (channelsIsFunction) {
             channels = channels(doc, options.selector, options.fields);
         }
 
-        console.log('RPS.write → publish; doc, id, channels:', doc, id, channels);
+        //console.log('RPS.write → publish; doc, id, channels:', doc, id, channels);
 
         if (!channels) return;
 

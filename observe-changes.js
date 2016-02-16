@@ -111,7 +111,7 @@ RPS._observer.prototype.initialFetch = function () {
     //console.log('RPS._observer.initialFetch');
 
     if (!this.options.withoutMongo) {
-        console.log('RPS._observer.initialFetch → FETCH');
+        //console.log('RPS._observer.initialFetch → FETCH');
         this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
             this.docs[doc._id] = _.extend(doc, this.options.docsMixin);
         }, this);
@@ -146,12 +146,12 @@ RPS._observer.prototype.onMessage = function (message) {
 RPS._observer.prototype.handleMessage = function (message) {
     //noPause || this.pause();
 
-    console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
+    //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
     var rightIds,
         ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
 
     if (this.needToFetchAlways) {
-        console.log('RPS._observer.handleMessage → FETCH');
+        //console.log('RPS._observer.handleMessage → FETCH');
         rightIds = this.collection.find(this.selector, this.quickFindOptions).map(function (doc) {
             return doc._id;
         });
@@ -168,7 +168,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         } catch (e) {
             // ignore
         }
-        console.log('RPS._observer.handleMessage; ids:', ids);
+        //console.log('RPS._observer.handleMessage; ids:', ids);
     }
 
     if (!ids || !ids.length) return;
@@ -224,7 +224,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         //console.log('RPS._observer.handleMessage; this.collection._name, badTS, needToFetch:', this.collection._name, badTS, needToFetch);
 
         if (needToFetch) {
-            console.log('RPS._observer.handleMessage → FETCH');
+            //console.log('RPS._observer.handleMessage → FETCH');
             newDoc = this.collection.findOne(_.extend({}, this.selector, {_id: id}), this.findOptions);
         }
 
@@ -270,7 +270,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 this.callListeners(action, id, finalFields);
             }
         } else if (knownId) {
-            console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
+            //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
             try {
                 this.callListeners('removed', id);
