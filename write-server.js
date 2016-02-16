@@ -62,7 +62,7 @@ RPS.write = function (collection, method, options) {
                 idMap = [doc._id = doc._id || res]
             }
 
-            docs.forEach(function (doc) {
+            docs && docs.forEach(function (doc) {
                 publish(doc);
             });
         }
