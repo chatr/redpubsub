@@ -5,9 +5,9 @@ RPS._containsOperators = function (modifier) {
 };
 
 RPS._containsOnlySetters = function (modifier) {
-    return !_.difference(_.keys(modifier), ['$set', '$unset']).length && '_containsOnlySetters';
+    return !_.difference(_.keys(modifier), ['$set', '$unset']).length;
 };
 
 RPS._isSimpleModifier = function (modifier) {
-    return (!RPS._containsOperators(modifier) && 'NO_OPERATORS') || (RPS._containsOnlySetters(modifier) && 'ONLY_SETTERS');
+    return !RPS._containsOperators(modifier) || RPS._containsOnlySetters(modifier);
 };

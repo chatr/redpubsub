@@ -1,108 +1,103 @@
 RPS.write = function (collection, method, options) {
+    options = options || {};
+    options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : options.doc || {};
+
     var collectionName = collection._name,
         config = RPS.config[collectionName] || {},
-        channels, idMap, docs, fields,
-        ts = Date.now();
+        channels = !options.noPublish && (options.channels || config.channels || collectionName),
+        channelsIsFunction = _.isFunction(channels),
+        idMap,
+        docs;
 
-    //console.log('RPS.write; collectionName, method, options, config:', collectionName, method, options, config);
+    console.log('RPS.write; collectionName, method, options:', collectionName, method, options);
 
-    var publish = function (res) {
-        //console.log('RPS.write → publish; channels:', channels);
-        if (channels) {
-            //console.log('RPS.write → ready to notify Redis; res:', res);
+    var publish = function (doc, id) {
+        if (channelsIsFunction) {
+            channels = channels(doc, options.selector, options.fields);
+        }
 
-            var id = idMap || options.selector._id;
+        console.log('RPS.write → publish; doc, id, channels:', doc, id, channels);
 
-            if (!id || !id.length) {
-                id = method === 'insert' ? res : method === 'upsert' && res.insertedId;
+        if (!channels) return;
+
+        var message = {
+            _serverId: RPS._serverId,
+            doc: doc,
+            method: method,
+            selector: options.selector,
+            modifier: options.modifier,
+            withoutMongo: options.withoutMongo,
+            id: id || (doc && doc._id),
+            ts: Date.now()
+        },
+        messageString = JSON.stringify(message);
+
+        _.each(_.isArray(channels) ? channels : [channels], function (channel) {
+            if (!channel) return;
+
+            RPS._messenger.onMessage(channel, message);
+            RPS._pub(channel, messageString);
+        });
+    };
+
+    var afterWrite = function (res) {
+        if (!channels) return res;
+
+        if (options.withoutMongo) {
+            var _id = options.selector._id,
+                id = LocalCollection._selectorIsId(_id) ? _id : Random.id();
+            publish(null, id);
+        } else if (method === 'remove') {
+             idMap.forEach(function (id) {
+                publish(null, id);
+             });
+        } else {
+            if (idMap && idMap.length) {
+                docs = collection.find({_id: {$in: idMap}});
+            } else if (method === 'upsert' && res.insertedId) {
+                docs = collection.find({_id: res.insertedId});
+            } else if (method === 'insert') {
+                var doc = options.selector;
+                docs = [doc];
+                idMap = [doc._id = doc._id || res]
             }
 
-            var message = {
-                    _serverId: RPS._serverId,
-                    selector: options.selector,
-                    modifier: options.redModifier || options.modifier,
-                    method: method,
-                    withoutMongo: options.withoutMongo,
-                    ts: ts,
-                    id: id
-                },
-                messageString = JSON.stringify(message);
-
-            _.each(_.isArray(channels) ? channels : [channels], function (channel) {
-                //console.log('RPS.write → publish to Redis; channel, message:', channel, messageString);
-                if (channel) {
-                    RPS._messenger.onMessage(channel, message);
-
-                    ////Meteor.setTimeout(function () {
-                        RPS._pub(channel, messageString);
-                    ////}, _.random(0, 1000));  // simulate race condition
-                }
+            docs.forEach(function (doc) {
+                publish(doc);
             });
         }
 
         return res;
     };
 
-    options = options || {};
-    options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : options.doc || {};
-    options.fields = options.fields || {};
-
-    channels = options.channels || config.channels || collectionName;
-    var channelsIsFunction = _.isFunction(channels);
-    var fetchFields = _.compact(_.union(options.fetchFields || config.fetchFields, ['_id']));
-    if (channels && method !== 'insert') {
-        var existedFields = _.union(_.keys(options.selector), _.keys(options.fields)),
-            missedFields = _.difference(fetchFields, existedFields);
-
-        //console.log('RPS.write; _.keys(options.fields), existedFields, missedFields:', _.keys(options.fields), existedFields, missedFields);
-
-        if ((missedFields.length && channelsIsFunction) || !LocalCollection._selectorIsId(options.selector._id)) {
-            var findOptions = {fields: {}};
-            _.each(missedFields.length ? missedFields : ['_id'], function (fieldName) {
-                findOptions.fields[fieldName] = 1;
-            });
-
-            //console.log('RPS.write → FETCH DOCS FROM DB; options.selector, fields:', options.selector, findOptions);
-            docs = collection.find(options.selector, findOptions).fetch();
-            idMap = _.pluck(docs, '_id');
-            if (idMap.length === 1) {
-                idMap = idMap[0];
-            }
-        }
-    }
-
-    _.each(fetchFields, function (field) {
-        if (!fields) fields = {};
-
-        var value = options.fields[field] || options.selector[field] || _.compact(_.uniq(_.pluck(docs, field)));
-
-        if (_.isArray(value) && value.length === 1) {
-            value = value[0];
-        }
-
-        fields[field] = value;
-    });
-
-    if (channelsIsFunction) {
-        channels = channels(options.selector, fields);
-    }
-
-    var callback = _.last(_.toArray(arguments)),
-        async = _.isFunction(callback);
-
-    //console.log('RPS.write; channels, async:', channels, async);
-
-    if (async && !options.withoutMongo && !options.noWrite) {
-        //console.log('RPS.write → async && !options.withoutMongo');
-        return RPS._write(collection, method, options, function (err, res) {
-            if (!err) {
-                publish(res);
-            }
-            callback(err, res);
-        });
+    if (options.noWrite) {
+        publish(options.doc);
     } else {
-        var res = !options.withoutMongo && !options.noWrite && RPS._write(collection, method, options);
-        //console.log('RPS.write → before publish; res:', res);
-        return publish(res);
+        if (channels && method !== 'insert' && !options.withoutMongo) {
+            var findOptions = {fields: {_id: 1}};
+
+            if (method !== 'remove' && (!options.options || !options.options.multi)) {
+                findOptions.limit = 1;
+            }
+
+            idMap = collection.find(options.selector, findOptions).map(function (doc) {
+                return doc._id;
+            });
+        }
+
+        var callback = _.last(_.toArray(arguments)),
+            async = _.isFunction(callback);
+
+        if (async && !options.withoutMongo) {
+            return RPS._write(collection, method, options, function (err, res) {
+                if (!err) {
+                    afterWrite(res);
+                }
+                callback(err, res);
+            });
+        } else {
+            var res = !options.withoutMongo && RPS._write(collection, method, options);
+            return afterWrite(res);
+        }
     }
 };

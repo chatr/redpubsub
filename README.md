@@ -71,42 +71,30 @@ RPS.config.testCollection = {
 Find right channel dinamically:
 ```js
 RPS.config.Clients = {
-  channels: function (selector) {
-    return 'clientById:' + selector._id;
+  channels: function (doc, selector, fields) {
+    return 'clientById:' + doc._id;
   }
 }
 ```
 
 Note that `selector` in above example is take from `RPS.write` call.
 
-If you need more fields to compute the chanell name you can ask to fetch it from DB via `fetchFields` option and receive in `fields` arguments:
+To compute the chanell name use `doc`, `selector` or custom `fields` property :
 ```js
 RPS.config.Clients = {
   fetchFields: ['hostId'],
-  channels: function (selector, fields) {
-    return ['clientById:' + fields._id, 'clientsByHostId:' + fields.hostId];
+  channels: function (doc, selector, fields) {
+    return (doc && doc.hostId && 'clientsByHostId:' + doc.hostId)
+      || (fields && fields.hostId && 'clientsByHostId:' + fields.hostId);
   }
 }
 ```
 
-Note that `fields.hostId` can be a single value or an array of ids if docs that match your `selector` have a different values. So a real config will look like:
+Pass needed `fields` when calling `RPS.write`:
 ```js
-RPS.config.Transactions = {
-    fetchFields: ['hostId'],
-    channels: function (selector, fields) {
-        var hostId = _.isArray(fields.hostId) ? fields.hostId : [fields.hostId];
-        return _.map(hostId, function (hostId) {
-            return hostId && ('transactionsByHostId:' + hostId);
-        });
-    }
-};
-```
-
-If don’t want to make an extra fetch, pass needed `fields` when calling `RPS.write`:
-```js
-RPS.write(Sessions, 'remove', {
-    selector: {_id: session._id},
-    fields: {userId: session.userId}
+RPS.write(Clients, 'remove', {
+    selector: {_id: clientId},
+    fields: {hostId: hostId}
 });
 ```
 
@@ -143,7 +131,8 @@ Meteor.publish('client', function (clientId) {
             collection: Typings,
             options: {
                 selector: {_id: clientId},
-                channel: 'typingByClientId:' + clientId
+                channel: 'typingByClientId:' + clientId,
+                withoutMongo: true
             }
         }
     ]);

@@ -34,7 +34,7 @@ RPS._observer = function (collection, options, key) {
     this.selector = options.selector;
     this.findOptions = EJSON.clone(options.options) || {};
     this.findOptions.fields = this.findOptions.fields || {};
-    this.needToFetchAlways = this.findOptions.limit || this.findOptions.sort;
+    this.needToFetchAlways = this.findOptions.limit && !options.lazyLimit;
     this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
 
     this.projectionFields = _.clone(this.findOptions.fields);
@@ -57,7 +57,8 @@ RPS._observer = function (collection, options, key) {
     this.key = key;
     this.listeners = {};
     this.docs = {};
-    this.lastMethods = {};
+    this.lastMethod = {};
+    this.lastTs = {};
     this.messageQueue = [];
 
     // You may not filter out _id when observing changes, because the id is a core
@@ -110,10 +111,9 @@ RPS._observer.prototype.initialFetch = function () {
     //console.log('RPS._observer.initialFetch');
 
     if (!this.options.withoutMongo) {
-        var docs = this.collection.find(this.selector, this.findOptions).fetch();
-
-        _.each(docs, function (doc) {
-            this.docs[doc._id] = doc;
+        console.log('RPS._observer.initialFetch → FETCH');
+        this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
+            this.docs[doc._id] = _.extend(doc, this.options.docsMixin);
         }, this);
     }
 
@@ -127,7 +127,7 @@ RPS._observer.prototype.initialAdd = function (listenerId) {
 
     if (callbacks.added) {
         _.each(this.docs, function (doc, id) {
-            callbacks.added(id, _.extend(doc, this.options.docsMixin));
+            callbacks.added(id, this.projectionFn(doc));
         }, this);
     }
 };
@@ -143,20 +143,19 @@ RPS._observer.prototype.onMessage = function (message) {
     }
 };
 
-RPS._observer.prototype.handleMessage = function (message, noPause) {
+RPS._observer.prototype.handleMessage = function (message) {
     //noPause || this.pause();
 
-    // fight against race condition
-    var badTS = this.lastTS >= message.ts;
-    this.lastTS = badTS ? this.lastTS : message.ts;
-
-    //if (badTS) {
-    //    console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
-    //}
-
-    //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
-    var rightIds = this.needToFetchAlways && _.pluck(this.collection.find(this.selector, this.quickFindOptions).fetch(), '_id'),
+    console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
+    var rightIds,
         ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
+
+    if (this.needToFetchAlways) {
+        console.log('RPS._observer.handleMessage → FETCH');
+        rightIds = this.collection.find(this.selector, this.quickFindOptions).map(function (doc) {
+            return doc._id;
+        });
+    }
 
     //console.log('RPS._observer.handleMessage; message.withoutMongo, ids:', message.withoutMongo, ids);
     if (message.withoutMongo && !ids) {
@@ -169,36 +168,48 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
         } catch (e) {
             // ignore
         }
-        //console.log('RPS._observer.handleMessage; ids:', ids);
+        console.log('RPS._observer.handleMessage; ids:', ids);
     }
 
     if (!ids || !ids.length) return;
 
     _.each(ids, function (id) {
-        var lastMethod = this.lastMethods[id];
+        // fight against race condition
+        var lastTs = this.lastTs[id],
+            badTS = lastTs >= message.ts,
+            lastMethod = this.lastMethod[id];
+
+        this.lastTs[id] = badTS ? lastTs : message.ts;
+    
+        //if (badTS) {
+        //    console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
+        //}
+
         if (badTS
             && lastMethod
             && ((message.method !== 'remove' && lastMethod === 'remove') || (message.method === 'remove' && _.contains(['insert', 'upsert'], lastMethod)))) {
-            //console.warn('RPS: SKIP MESSAGE! All fine already');
+            console.warn('RPS: SKIP MESSAGE! All fine already');
             return;
         }
 
-        this.lastMethods[id] = message.method;
+        this.lastMethod[id] = message.method;
 
         var oldDoc = this.docs[id],
             knownId = !!oldDoc,
             isRightId = !rightIds || _.contains(rightIds, id),
-            newDoc;
+            newDoc = message.doc;
 
         //console.log('RPS._observer.handleMessage; oldDoc, this.selector:', oldDoc, this.selector);
 
-        if (message.method === 'insert' && !badTS) {
-            newDoc = _.extend(message.selector, {_id: id});
-        } else if (message.withoutMongo && message.method !== 'remove') {
-            try {
-                newDoc = _.extend({_id: id}, oldDoc);
-                LocalCollection._modify(newDoc, message.modifier);
-            } catch (e) {}
+        if (!newDoc) {
+            if (message.method === 'insert' && !badTS) {
+                newDoc = _.extend(message.selector, {_id: id});
+            } else if (message.withoutMongo && message.method !== 'remove') {
+                try {
+                    newDoc = _.extend({_id: id}, oldDoc);
+                    LocalCollection._modify(newDoc, message.modifier);
+                } catch (e) {}
+            }
         }
 
         if (!newDoc && oldDoc && _.contains(['update', 'upsert'], message.method) && isRightId && !badTS) {
@@ -212,8 +223,8 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
 
         //console.log('RPS._observer.handleMessage; this.collection._name, badTS, needToFetch:', this.collection._name, badTS, needToFetch);
 
-
         if (needToFetch) {
+            console.log('RPS._observer.handleMessage → FETCH');
             newDoc = this.collection.findOne(_.extend({}, this.selector, {_id: id}), this.findOptions);
         }
 
@@ -221,7 +232,7 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
             && isRightId
             && (message.withoutMongo
                 || needToFetch
-                || _.contains(rightIds, id)
+                || (rightIds && _.contains(rightIds, id))
                 || (this.matcher ? this.matcher.documentMatches(newDoc).result : this.collection.find(_.extend({}, this.selector, {_id: id}), this.quickFindOptions).count()));
 
         //console.log('RPS._observer.handleMessage; newDoc, this.selector:', newDoc, this.selector);
@@ -230,12 +241,11 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
 
         if (message.method !== 'remove' && dokIsOk) {
             if (this.options.docsMixin) {
-                var fieldsFromModifier,
-                    isSimpleModifier = RPS._isSimpleModifier(message.modifier);
+                var fieldsFromModifier;
 
-                if (isSimpleModifier === 'NO_OPERATORS') {
+                if (!RPS._containsOperators(message.modifier)) {
                     fieldsFromModifier = _.keys(message.modifier);
-                } else if (isSimpleModifier === 'ONLY_SETTERS') {
+                } else if (RPS._containsOnlySetters(message.modifier)) {
                     fieldsFromModifier = _.union(_.keys(message.modifier.$set || {}), _.keys(message.modifier.$unset || {}));
                 }
                 _.extend(newDoc, _.omit(this.options.docsMixin, fieldsFromModifier));
@@ -260,7 +270,7 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
                 this.callListeners(action, id, finalFields);
             }
         } else if (knownId) {
-            //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
+            console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
             try {
                 this.callListeners('removed', id);
@@ -287,7 +297,7 @@ RPS._observer.prototype.handleMessage = function (message, noPause) {
             _.each(_.difference(rightIds, idMap), function (id) {
                 var doc = this.collection.findOne({_id: id}, this.findOptions);
                 this.docs[id] = _.extend(doc, this.options.docsMixin);
-                this.callListeners('added', id, doc);
+                this.callListeners('added', id, this.projectionFn(doc));
             }, this);
         }
     }, this);
