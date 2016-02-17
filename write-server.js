@@ -9,16 +9,19 @@ RPS.write = function (collection, method, options) {
         idMap,
         docs;
 
-    //console.log('RPS.write; collectionName, method, options:', collectionName, method, options);
+    //console.log('RPS.write; collectionName, method, options:', collectionName, method, options, channels);
 
     var publish = function (doc, id) {
+        var channelsForDoc;
         if (channelsIsFunction) {
-            channels = channels(doc, options.selector, options.fields);
+            channelsForDoc = channels(doc, options.selector, options.fields);
+        } else {
+            channelsForDoc = channels;
         }
 
         //console.log('RPS.write → publish; doc, id, channels:', doc, id, channels);
 
-        if (!channels) return;
+        if (!channelsForDoc) return;
 
         var message = {
             _serverId: RPS._serverId,
@@ -32,7 +35,7 @@ RPS.write = function (collection, method, options) {
         },
         messageString = JSON.stringify(message);
 
-        _.each(_.isArray(channels) ? channels : [channels], function (channel) {
+        _.each(_.isArray(channelsForDoc) ? channelsForDoc : [channelsForDoc], function (channel) {
             if (!channel) return;
 
             RPS._messenger.onMessage(channel, message);

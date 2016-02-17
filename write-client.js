@@ -1,8 +1,11 @@
 RPS.write = function (collection, method, options) {
-    //console.log('RPS.write; collection._name:', collection._name);
+    //console.log('RPS.write; collection._name, method:', collection._name, method);
 
     options = options || {};
     options.selector = options.selector || options.doc;
 
-    return RPS._write(collection, method, options, _.last(_.toArray(arguments)));
+    var callback = _.last(_.toArray(arguments)),
+        async = _.isFunction(callback);
+
+    return RPS._write(collection, method, options, async && callback);
 };
