@@ -113,6 +113,7 @@ RPS._observer.prototype.initialFetch = function () {
     if (!this.options.withoutMongo) {
         //console.log('RPS._observer.initialFetch → FETCH');
         this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
+            //console.log('RPS._observer.initialFetch → FETCH; doc._id:', doc._id);
             this.docs[doc._id] = _.extend(doc, this.options.docsMixin);
         }, this);
     }
@@ -188,7 +189,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         if (badTS
             && lastMethod
             && ((message.method !== 'remove' && lastMethod === 'remove') || (message.method === 'remove' && _.contains(['insert', 'upsert'], lastMethod)))) {
-            console.warn('RPS: SKIP MESSAGE! All fine already');
+            //console.warn('RPS: SKIP MESSAGE! All fine already');
             return;
         }
 

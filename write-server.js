@@ -6,8 +6,8 @@ RPS.write = function (collection, method, options) {
         config = RPS.config[collectionName] || {},
         channels = !options.noPublish && (options.channels || config.channels || collectionName),
         channelsIsFunction = _.isFunction(channels),
-        idMap,
-        docs;
+        idMap = [],
+        docs = [];
 
     //console.log('RPS.write; collectionName, method, options:', collectionName, method, options, channels);
 
@@ -25,7 +25,7 @@ RPS.write = function (collection, method, options) {
 
         var message = {
             _serverId: RPS._serverId,
-            doc: doc,
+            doc: method !== 'remove' && doc,
             method: method,
             selector: options.selector,
             modifier: options.modifier,
@@ -51,8 +51,8 @@ RPS.write = function (collection, method, options) {
                 id = LocalCollection._selectorIsId(_id) ? _id : Random.id();
             publish(null, id);
         } else if (method === 'remove') {
-             idMap.forEach(function (id) {
-                publish(null, id);
+             docs.forEach(function (doc) {
+                publish(doc);
              });
         } else {
             if (idMap && idMap.length) {
@@ -77,14 +77,19 @@ RPS.write = function (collection, method, options) {
         publish(options.doc);
     } else {
         if (channels && method !== 'insert' && !options.withoutMongo) {
-            var findOptions = {fields: {_id: 1}};
+            var findOptions = {};
+
+            if (method !== 'remove') {
+                findOptions.fields = {_id: 1};
+            }
 
             if (method !== 'remove' && (!options.options || !options.options.multi)) {
                 findOptions.limit = 1;
             }
 
-            idMap = collection.find(options.selector, findOptions).map(function (doc) {
-                return doc._id;
+            collection.find(options.selector, findOptions).forEach(function (doc) {
+                idMap.push(doc._id);
+                docs.push(doc);
             });
         }
 
