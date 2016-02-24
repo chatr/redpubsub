@@ -2,7 +2,9 @@ RPS.write = function (collection, method, options) {
     options = options || {};
     options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : options.doc || {};
 
-    var collectionName = collection._name,
+    var _id = options.selector._id,
+        _idIsId = LocalCollection._selectorIsId(_id),
+        collectionName = collection._name,
         config = RPS.config[collectionName] || {},
         channels = !options.noPublish && (options.channels || config.channels || collectionName),
         channelsIsFunction = _.isFunction(channels),
@@ -47,15 +49,14 @@ RPS.write = function (collection, method, options) {
         if (!channels) return res;
 
         if (options.withoutMongo) {
-            var _id = options.selector._id,
-                id = LocalCollection._selectorIsId(_id) ? _id : Random.id();
+            var id = _idIsId ? _id : (method === 'insert' || method === 'upsert') && Random.id();
             publish(null, id);
         } else if (method === 'remove') {
              docs.forEach(function (doc) {
                 publish(doc);
              });
         } else {
-            if (idMap && idMap.length) {
+            if (idMap.length) {
                 docs = collection.find({_id: {$in: idMap}});
             } else if (method === 'upsert' && res.insertedId) {
                 docs = collection.find({_id: res.insertedId});
@@ -80,17 +81,24 @@ RPS.write = function (collection, method, options) {
             var findOptions = {};
 
             if (method !== 'remove') {
-                findOptions.fields = {_id: 1};
+                if (_idIsId) {
+                    idMap.push(_id);
+                } else {
+                    findOptions.fields = {_id: 1};
+
+                    if (!options.options || !options.options.multi) {
+                        findOptions.limit = 1;
+                    }
+                }
             }
 
-            if (method !== 'remove' && (!options.options || !options.options.multi)) {
-                findOptions.limit = 1;
+            if (!idMap.length) {
+                collection.find(options.selector, findOptions).forEach(function (doc) {
+                    idMap.push(doc._id);
+                    docs.push(doc);
+                });
             }
 
-            collection.find(options.selector, findOptions).forEach(function (doc) {
-                idMap.push(doc._id);
-                docs.push(doc);
-            });
         }
 
         var callback = _.last(_.toArray(arguments)),
