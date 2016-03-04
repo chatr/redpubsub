@@ -38,9 +38,31 @@ RPS._observer = function (collection, options, key) {
     this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
 
     this.projectionFields = _.clone(this.findOptions.fields);
-    _.each(this.options.docsMixin, function (value, key) {
-        this.projectionFields[key] = 1;
-    }, this);
+
+    if (this.options.docsMixin && this.projectionFields) {
+        var including = null; // Unknown
+
+        _.each(this.projectionFields, function (rule, keyPath) {
+            if (keyPath === '_id') return;
+
+            rule = !!rule;
+            if (including === null) {
+                including = rule;
+            }
+            if (including !== rule) {
+                // This error message is copied from MongoDB shell
+                throw MinimongoError("You cannot currently mix including and excluding fields.");
+            }
+        });
+
+        _.each(this.options.docsMixin, function (value, key) {
+            if (including) {
+                this.projectionFields[key] = 1;
+            } else {
+                delete this.projectionFields[key];
+            }
+        }, this);
+    }
 
     //console.log('RPS: this.projectionFields:', this.projectionFields);
 
@@ -111,9 +133,9 @@ RPS._observer.prototype.initialFetch = function () {
     //console.log('RPS._observer.initialFetch');
 
     if (!this.options.withoutMongo) {
-        //console.log('RPS._observer.initialFetch → FETCH');
+        console.log('RPS._observer.initialFetch → FETCH');
         this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
-            //console.log('RPS._observer.initialFetch → FETCH; doc._id:', doc._id);
+            console.log('RPS._observer.initialFetch → FETCH; doc._id:', doc._id);
             this.docs[doc._id] = _.extend(doc, this.options.docsMixin);
         }, this);
     }
@@ -122,7 +144,7 @@ RPS._observer.prototype.initialFetch = function () {
 };
 
 RPS._observer.prototype.initialAdd = function (listenerId) {
-    //console.log('RPS._observer.initialAdd; listenerId:', listenerId);
+    console.log('RPS._observer.initialAdd; listenerId:', listenerId);
 
     var callbacks = this.listeners[listenerId];
 
