@@ -295,25 +295,25 @@ RPS._observer.prototype.handleMessage = function (message) {
         } else if (knownId) {
             //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
+            delete this.docs[id];
+
             try {
                 this.callListeners('removed', id);
             } catch (e) {
                 // already removed, ignore it
             }
-
-            delete this.docs[id];
         }
 
         if (rightIds) {
             // remove irrelevant docs
             var idMap = _.keys(this.docs);
             _.each(_.difference(idMap, rightIds), function (id) {
+                delete this.docs[id];
                 try {
                     this.callListeners('removed', id);
                 } catch (e) {
                     // already removed, ignore it
                 }
-                delete this.docs[id];
             }, this);
 
             // add new from DB
