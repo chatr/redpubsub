@@ -133,9 +133,9 @@ RPS._observer.prototype.initialFetch = function () {
     //console.log('RPS._observer.initialFetch');
 
     if (!this.options.withoutMongo) {
-        console.log('RPS._observer.initialFetch → FETCH');
+        //console.log('RPS._observer.initialFetch → FETCH');
         this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
-            console.log('RPS._observer.initialFetch → FETCH; doc._id:', doc._id);
+            //console.log('RPS._observer.initialFetch → FETCH; doc._id:', doc._id);
             this.docs[doc._id] = _.extend(doc, this.options.docsMixin);
         }, this);
     }
@@ -144,7 +144,7 @@ RPS._observer.prototype.initialFetch = function () {
 };
 
 RPS._observer.prototype.initialAdd = function (listenerId) {
-    console.log('RPS._observer.initialAdd; listenerId:', listenerId);
+    //console.log('RPS._observer.initialAdd; listenerId:', listenerId);
 
     var callbacks = this.listeners[listenerId];
 
