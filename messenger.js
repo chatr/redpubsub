@@ -13,7 +13,7 @@
  * @private
  */
 RPS._matchRuleShort = function(str, rule) {
-    return new RegExp("^" + rule.replace("*", ".*") + "$").test(str);
+    return new RegExp("^" + rule.replace(/\*/g, ".*") + "$").test(str);
 };
 
 RPS._messenger = {
