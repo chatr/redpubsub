@@ -1,5 +1,5 @@
 Package.describe({
-  name: 'chatra:redpubsub',
+  name: 'beeby:redpubsub',
   version: '0.8.6',
   // Brief, one-line summary of the package.
   summary: 'Custom pub/sub interface for Meteor on top of Redis',
