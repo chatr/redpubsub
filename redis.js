@@ -27,13 +27,13 @@ var createRedisClient = function (conf, key, revive) {
         console.error(logLabel + err.toString())
     });
 
-    client.on('connect', Meteor.bindEnvironment(function () {
+    client.on('connect', function () {
         console.info(logLabel + 'connected to Redis!');
         if (needToResubscribe) {
             resubscribe();
             needToResubscribe = false;
         }
-    }));
+    });
 
     client.on('reconnecting', function () {
         console.info(logLabel + 'reconnecting to Redis...');
@@ -63,7 +63,7 @@ var createRedisClient = function (conf, key, revive) {
         console.info(logLabel + 'unsubscribed from "' +  channel + '"' + ' (' + count + ')');
     });
 
-    client.on('message', Meteor.bindEnvironment(function (channel, messageString) {
+    client.on('message', function (channel, messageString) {
         //console.log(logLabel + channel + ': ' + messageString);
         var message;
         try {
@@ -73,9 +73,9 @@ var createRedisClient = function (conf, key, revive) {
         }
 
         if (message && message._serverId !== RPS._serverId) {
-            RPS._messenger.onMessage(channel, message);
+            RPS._messenger.onMessage(channel, message, true);
         }
-    }));
+    });
 
     return client;
 };
@@ -133,7 +133,7 @@ RPS._pub = function (channel, message) {
 };
 
 var reviveСlient = function (key) {
-    clients[key] = createRedisClient(redisConfig, key, true);
+    clients[key] = createRedisClient(redisConfig, key, key === 'sub');
 };
 
 var resubscribe = function () {

@@ -16,6 +16,8 @@ RPS._matchRuleShort = function(str, rule) {
     return new RegExp("^" + rule.replace(/\*/g, ".*") + "$").test(str);
 };
 
+var Fiber = Npm.require('fibers');
+
 RPS._messenger = {
     channels: {},
     observers: {},
@@ -44,7 +46,7 @@ RPS._messenger = {
         }
         delete RPS._messenger.observers[observerKey];
     },
-    onMessage: function (channel, message) {
+    onMessage: function (channel, message, runWithFiber) {
         //console.log('RPS._messenger.onMessage; channel, message:', channel, message);
         var channels = Object.keys(RPS._messenger.channels);
         _.each(channels, function (openChannel, idx) {
@@ -53,9 +55,16 @@ RPS._messenger = {
                 _.each(RPS._messenger.channels[openChannel], function (flag, observerKey) {
                     var observer = RPS._observers[observerKey];
                     if (observer) {
-                        observer.onMessage(EJSON.clone(message));
+                        var messageClone =  EJSON.clone(message);
+                        if (runWithFiber) {
+                            Fiber(function () {
+                                observer.onMessage(messageClone);
+                            }).run();
+                        } else {
+                            observer.onMessage(messageClone);
+                        }
                     }
-                });
+                })
             }
         });
     }
