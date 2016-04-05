@@ -1,3 +1,21 @@
+/**
+ * Match a wildcard rule against and input string.
+ *
+ *   "a*b"  => everything that starts with "a" and ends with "b"
+ "   a*"    => everything that starts with "a"
+ "   *b"    => everything that ends with "b"
+ "   *a*"   => everything that has a "a" in it
+ "   *a*b*" => everything that has a "a" in it, followed by anything, followed by a "b", followed by anything
+
+ * @param str - The full string to be matched against, e.g. my::channel::value
+ * @param rule - A string to match with, which can include wildcards, e.g. my::channel::*
+ * @returns {boolean}
+ * @private
+ */
+RPS._matchRuleShort = function(str, rule) {
+    return new RegExp("^" + rule.replace(/\*/g, ".*") + "$").test(str);
+};
+
 var Fiber = Npm.require('fibers');
 
 RPS._messenger = {
@@ -30,17 +48,23 @@ RPS._messenger = {
     },
     onMessage: function (channel, message, runWithFiber) {
         //console.log('RPS._messenger.onMessage; channel, message:', channel, message);
-        _.each(RPS._messenger.channels[channel], function (flag, observerKey) {
-            var observer = RPS._observers[observerKey];
-            if (observer) {
-                var messageClone =  EJSON.clone(message);
-                if (runWithFiber) {
-                    Fiber(function () {
-                        observer.onMessage(messageClone);
-                    }).run();
-                } else {
-                    observer.onMessage(messageClone);
-                }
+        var channels = Object.keys(RPS._messenger.channels);
+        _.each(channels, function (openChannel, idx) {
+            //Support wildcard matching for open channels.
+            if (RPS._matchRuleShort(channel, openChannel)) {
+                _.each(RPS._messenger.channels[openChannel], function (flag, observerKey) {
+                    var observer = RPS._observers[observerKey];
+                    if (observer) {
+                        var messageClone =  EJSON.clone(message);
+                        if (runWithFiber) {
+                            Fiber(function () {
+                                observer.onMessage(messageClone);
+                            }).run();
+                        } else {
+                            observer.onMessage(messageClone);
+                        }
+                    }
+                })
             }
         });
     }

@@ -169,6 +169,19 @@ RPS._observer.prototype.onMessage = function (message) {
 RPS._observer.prototype.handleMessage = function (message) {
     //noPause || this.pause();
 
+    // fight against race condition
+    var badTS = this.lastTS >= message.ts;
+    this.lastTS = badTS ? this.lastTS : message.ts;
+
+    //if (badTS) {
+    //    console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
+    //}
+    
+    //If a message skips Mongo, it wont have any ID, yet the routien that follows relies on it. Forcing the issue for now.
+    if (message.withoutMongo && !message.id) {
+        message.id = message.ts + message._serverId;
+    }
+
     //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
     var rightIds,
         ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
