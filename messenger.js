@@ -33,13 +33,12 @@ RPS._messenger = {
         _.each(RPS._messenger.channels[channel], function (flag, observerKey) {
             var observer = RPS._observers[observerKey];
             if (observer) {
-                var messageClone =  EJSON.clone(message);
                 if (runWithFiber) {
                     Fiber(function () {
-                        observer.onMessage(messageClone);
+                        observer.onMessage(message);
                     }).run();
                 } else {
-                    observer.onMessage(messageClone);
+                    observer.onMessage(message);
                 }
             }
         });
