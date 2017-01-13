@@ -32,7 +32,7 @@ RPS._observer = function (collection, options, key) {
     this.collection = collection;
     this.options = options;
     this.selector = options.selector;
-    this.findOptions = EJSON.clone(options.options) || {};
+    this.findOptions = options.options || {};
     this.findOptions.fields = this.findOptions.fields || {};
     this.needToFetchAlways = this.findOptions.limit && !options.lazyLimit;
     this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
@@ -98,7 +98,9 @@ RPS._observer.prototype.initialize = function () {
     if (this.initialized) return;
     //console.log('RPS._observer.initialize');
 
-    RPS._messenger.addObserver(this.key, this.channel);
+    if (!this.options.nonreactive) {
+        RPS._messenger.addObserver(this.key, this.channel);
+    }
 
     this.initialized = true;
 };
@@ -226,7 +228,7 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         if (!newDoc) {
             if (message.method === 'insert' && !badTS) {
-                newDoc = _.extend(message.selector, {_id: id});
+                newDoc = _.extend({}, message.selector, {_id: id});
             } else if (message.withoutMongo && message.method !== 'remove') {
                 try {
                     newDoc = _.extend({_id: id}, oldDoc);
@@ -346,7 +348,9 @@ RPS._observer.prototype.resume = function () {
 RPS._observer.prototype.kill = function () {
     if (!this.initialized) return;
     //console.log('RPS._observer.kill');
-    RPS._messenger.removeObserver(this.key);
+    if (!this.options.nonreactive) {
+        RPS._messenger.removeObserver(this.key);
+    }
     delete RPS._observers[this.key];
     this.initialized = false;
     //delete this.docs;
