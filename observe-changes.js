@@ -29,6 +29,8 @@ RPS.observeChanges = function (collection, options, callbacks) {
 RPS._observer = function (collection, options, key) {
     //console.log('RPS._observer');
 
+    var _this = this;
+
     this.collection = collection;
     this.options = options;
     this.selector = options.selector;
@@ -57,20 +59,20 @@ RPS._observer = function (collection, options, key) {
 
         _.each(this.options.docsMixin, function (value, key) {
             if (including) {
-                this.projectionFields[key] = 1;
+                _this.projectionFields[key] = 1;
             } else {
-                delete this.projectionFields[key];
+                delete _this.projectionFields[key];
             }
-        }, this);
+        });
     }
 
     //console.log('RPS: this.projectionFields:', this.projectionFields);
 
-    this.projectionFn = LocalCollection._compileProjection(this.projectionFields);
+    this.projectionFn = this.projectionFields ? LocalCollection._compileProjection(this.projectionFields) : function (doc) { return doc };
 
     try {
         this.matcher = new Minimongo.Matcher(this.selector);
-        this.findOptions.fields = this.matcher.combineIntoProjection(this.projectionFields);
+        this.findOptions.fields = this.projectionFields && this.matcher.combineIntoProjection(this.projectionFields);
     } catch (e) {
         // ignore
     }
@@ -119,7 +121,7 @@ RPS._observer.prototype.callListeners = function (action, id, fields) {
     _.each(this.listeners, function (callbacks, listenerId) {
         //console.log('RPS._observer.callListeners; listenerId, action, id, fields:', listenerId, action, id, fields);
         callbacks[action] && callbacks[action](id, fields);
-    }, this);
+    });
 };
 
 RPS._observer.prototype.removeListener = function (listenerId) {
@@ -136,10 +138,12 @@ RPS._observer.prototype.initialFetch = function () {
 
     if (!this.options.withoutMongo) {
         //console.log('RPS._observer.initialFetch → FETCH');
+        var _this = this;
+
         this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
             //console.log('RPS._observer.initialFetch → FETCH; doc._id:', doc._id);
-            this.docs[doc._id] = _.extend(doc, this.options.docsMixin);
-        }, this);
+            _this.docs[doc._id] = _.extend(doc, _this.options.docsMixin);
+        });
     }
 
     this.initiallyFetched = true;
@@ -148,12 +152,13 @@ RPS._observer.prototype.initialFetch = function () {
 RPS._observer.prototype.initialAdd = function (listenerId) {
     //console.log('RPS._observer.initialAdd; listenerId:', listenerId);
 
+    var _this = this;
     var callbacks = this.listeners[listenerId];
 
     if (callbacks.added) {
         _.each(this.docs, function (doc, id) {
-            callbacks.added(id, this.projectionFn(doc));
-        }, this);
+            callbacks.added(id, _this.projectionFn(doc));
+        });
     }
 };
 
@@ -169,9 +174,15 @@ RPS._observer.prototype.onMessage = function (message) {
 };
 
 RPS._observer.prototype.handleMessage = function (message) {
-    //noPause || this.pause();
+    var _this = this;
 
     //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
+
+    if (_this.matcher && message.doc && !_this.matcher.documentMatches(message.doc).result) {
+        //console.log('RPS._observer.handleMessage → abort (message.doc does not match with the selector)');
+        return;
+    }
+
     var rightIds,
         ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
 
@@ -193,18 +204,18 @@ RPS._observer.prototype.handleMessage = function (message) {
         } catch (e) {
             // ignore
         }
-        //console.log('RPS._observer.handleMessage; ids:', ids);
+        //console.log('RPS._observer.handleMessage → after Minimongo.Matcher; ids:', ids);
     }
 
     if (!ids || !ids.length) return;
 
     _.each(ids, function (id) {
         // fight against race condition
-        var lastTs = this.lastTs[id],
+        var lastTs = _this.lastTs[id],
             badTS = lastTs >= message.ts,
-            lastMethod = this.lastMethod[id];
+            lastMethod = _this.lastMethod[id];
 
-        this.lastTs[id] = badTS ? lastTs : message.ts;
+        _this.lastTs[id] = badTS ? lastTs : message.ts;
     
         //if (badTS) {
         //    console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
@@ -217,14 +228,14 @@ RPS._observer.prototype.handleMessage = function (message) {
             return;
         }
 
-        this.lastMethod[id] = message.method;
+        _this.lastMethod[id] = message.method;
 
-        var oldDoc = this.docs[id],
+        var oldDoc = _this.docs[id],
             knownId = !!oldDoc,
             isRightId = !rightIds || _.contains(rightIds, id),
             newDoc = message.doc;
 
-        //console.log('RPS._observer.handleMessage; oldDoc, this.selector:', oldDoc, this.selector);
+        //console.log('RPS._observer.handleMessage; oldDoc, this.selector:', oldDoc, _this.selector);
 
         if (!newDoc) {
             if (message.method === 'insert' && !badTS) {
@@ -246,11 +257,11 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         var needToFetch = !newDoc && isRightId && message.method !== 'remove';
 
-        //console.log('RPS._observer.handleMessage; this.collection._name, badTS, needToFetch:', this.collection._name, badTS, needToFetch);
+        //console.log('RPS._observer.handleMessage; this.collection._name, badTS, needToFetch:', _this.collection._name, badTS, needToFetch);
 
         if (needToFetch) {
             //console.log('RPS._observer.handleMessage → FETCH');
-            newDoc = this.collection.findOne(_.extend({}, this.selector, {_id: id}), this.findOptions);
+            newDoc = _this.collection.findOne(_.extend({}, _this.selector, {_id: id}), _this.findOptions);
         }
 
         var dokIsOk = newDoc
@@ -258,14 +269,12 @@ RPS._observer.prototype.handleMessage = function (message) {
             && (message.withoutMongo
                 || needToFetch
                 || (rightIds && _.contains(rightIds, id))
-                || (this.matcher ? this.matcher.documentMatches(newDoc).result : this.collection.find(_.extend({}, this.selector, {_id: id}), this.quickFindOptions).count()));
+                || _this.collection.find(_.extend({}, _this.selector, {_id: id}), _this.quickFindOptions).count());
 
-        //console.log('RPS._observer.handleMessage; newDoc, this.selector:', newDoc, this.selector);
-        //console.log('RPS._observer.handleMessage; dokIsOk, this.selector:', dokIsOk, this.selector);
-        //console.log('RPS._observer.handleMessage; _.isEqual(newDoc, oldDoc), this.selector:', _.isEqual(newDoc, oldDoc), this.selector);
+        //console.log('RPS._observer.handleMessage; newDoc, dokIsOk, _.isEqual(newDoc, oldDoc), this.selector:', newDoc, dokIsOk, _.isEqual(newDoc, oldDoc), _this.selector);
 
         if (message.method !== 'remove' && dokIsOk) {
-            if (this.options.docsMixin) {
+            if (_this.options.docsMixin) {
                 var fieldsFromModifier;
 
                 if (!RPS._containsOperators(message.modifier)) {
@@ -273,7 +282,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 } else if (RPS._containsOnlySetters(message.modifier)) {
                     fieldsFromModifier = _.union(_.keys(message.modifier.$set || {}), _.keys(message.modifier.$unset || {}));
                 }
-                _.extend(newDoc, _.omit(this.options.docsMixin, fieldsFromModifier));
+                _.extend(newDoc, _.omit(_this.options.docsMixin, fieldsFromModifier));
             }
 
             // added or changed
@@ -287,47 +296,48 @@ RPS._observer.prototype.handleMessage = function (message) {
                 fields = newDoc;
             }
 
-            var finalFields = this.projectionFn(fields);
+            var finalFields = _this.projectionFn(fields);
             //console.log('RPS._observer.handleMessage; action, id, fields, finalFields, this.selector:', action, id, fields, finalFields, this.selector);
 
             if (!_.isEmpty(finalFields)) {
-                this.docs[id] = newDoc;
-                this.callListeners(action, id, finalFields);
+                _this.docs[id] = newDoc;
+                _this.callListeners(action, id, finalFields);
             }
         } else if (knownId) {
             //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
-            delete this.docs[id];
+            delete _this.docs[id];
 
             try {
-                this.callListeners('removed', id);
+                _this.callListeners('removed', id);
             } catch (e) {
                 // already removed, ignore it
             }
         }
 
         if (rightIds) {
-            // remove irrelevant docs
-            var idMap = _.keys(this.docs);
-            _.each(_.difference(idMap, rightIds), function (id) {
-                delete this.docs[id];
-                try {
-                    this.callListeners('removed', id);
-                } catch (e) {
-                    // already removed, ignore it
+            _.each(_this.docs, function (doc, id) {
+                // remove irrelevant docs
+                if (!_.contains(rightIds, id)) {
+                    delete _this.docs[id];
+                    try {
+                        _this.callListeners('removed', id);
+                    } catch (e) {
+                        // already removed, ignore it
+                    }
                 }
-            }, this);
+            });
 
             // add new from DB
-            _.each(_.difference(rightIds, idMap), function (id) {
-                var doc = this.collection.findOne({_id: id}, this.findOptions);
-                this.docs[id] = _.extend(doc, this.options.docsMixin);
-                this.callListeners('added', id, this.projectionFn(doc));
-            }, this);
+            _.each(rightIds, function (id) {
+                if (!_this.docs[id]) {
+                    var doc = _this.collection.findOne({_id: id}, _this.findOptions);
+                    _this.docs[id] = _.extend(doc, _this.options.docsMixin);
+                    _this.callListeners('added', id, _this.projectionFn(doc));
+                }
+            });
         }
-    }, this);
-
-    //noPause || this.resume();
+    });
 };
 
 RPS._observer.prototype.pause = function () {
