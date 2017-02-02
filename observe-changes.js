@@ -181,7 +181,12 @@ RPS._observer.prototype.handleMessage = function (message) {
     // early decisions
     if (!_this.needToFetchAlways && _this.matcher && message.doc && !_this.matcher.documentMatches(message.doc).result) {
         if (_this.docs[message.id]) {
-            _this.callListeners('removed', message.id);
+            try {
+                _this.callListeners('removed', message.id);
+            } catch (e) {
+                // ignore
+            }
+
         }
         return;
     }
