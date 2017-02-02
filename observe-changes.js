@@ -178,15 +178,18 @@ RPS._observer.prototype.handleMessage = function (message) {
 
     //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
 
-    if (_this.matcher && message.doc && !_this.matcher.documentMatches(message.doc).result) {
-        //console.log('RPS._observer.handleMessage → abort (message.doc does not match with the selector)');
+    // early decisions
+    if (!_this.needToFetchAlways && _this.matcher && message.doc && !_this.matcher.documentMatches(message.doc).result) {
+        if (_this.docs[message.id]) {
+            _this.callListeners('removed', message.id);
+        }
         return;
     }
 
     var rightIds,
         ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
 
-    if (this.needToFetchAlways) {
+    if (_this.needToFetchAlways) {
         //console.log('RPS._observer.handleMessage → FETCH');
         rightIds = this.collection.find(this.selector, this.quickFindOptions).map(function (doc) {
             return doc._id;
@@ -269,7 +272,7 @@ RPS._observer.prototype.handleMessage = function (message) {
             && (message.withoutMongo
                 || needToFetch
                 || (rightIds && _.contains(rightIds, id))
-                || _this.collection.find(_.extend({}, _this.selector, {_id: id}), _this.quickFindOptions).count());
+                || (_this.matcher ? _this.matcher.documentMatches(newDoc).result : _this.collection.find(_.extend({}, _this.selector, {_id: id}), _this.quickFindOptions).count()));
 
         //console.log('RPS._observer.handleMessage; newDoc, dokIsOk, _.isEqual(newDoc, oldDoc), this.selector:', newDoc, dokIsOk, _.isEqual(newDoc, oldDoc), _this.selector);
 
