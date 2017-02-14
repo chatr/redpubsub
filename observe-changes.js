@@ -126,8 +126,8 @@ RPS._observer.prototype.callListeners = function (action, id, fields) {
 
 RPS._observer.prototype.removeListener = function (listenerId) {
     //console.log('RPS._observer.removeListener; listenerId:', listenerId);
-    delete this.listeners[listenerId];
-    if (_.isEmpty(this.listeners)) {
+    this.listeners[listenerId] = null;
+    if (_.isEmpty(_.compact(this.listeners))) {
         this.kill();
     }
 };
@@ -181,13 +181,12 @@ RPS._observer.prototype.handleMessage = function (message) {
     // early decisions
     if (!_this.needToFetchAlways && _this.matcher && message.doc && !_this.matcher.documentMatches(message.doc).result) {
         if (_this.docs[message.id]) {
-            delete _this.docs[message.id];
+            _this.docs[message.id] = null;
             try {
                 _this.callListeners('removed', message.id);
             } catch (e) {
                 // ignore
             }
-
         }
         return;
     }
@@ -315,7 +314,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         } else if (knownId) {
             //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
-            delete _this.docs[id];
+            _this.docs[id] = null;
 
             try {
                 _this.callListeners('removed', id);
@@ -328,7 +327,7 @@ RPS._observer.prototype.handleMessage = function (message) {
             _.each(_this.docs, function (doc, id) {
                 // remove irrelevant docs
                 if (!_.contains(rightIds, id)) {
-                    delete _this.docs[id];
+                    _this.docs[id] = null;
                     try {
                         _this.callListeners('removed', id);
                     } catch (e) {
@@ -366,11 +365,10 @@ RPS._observer.prototype.resume = function () {
 // kill, unsubscribe
 RPS._observer.prototype.kill = function () {
     if (!this.initialized) return;
-    //console.log('RPS._observer.kill');
+    this.initialized = false;
+
     if (!this.options.nonreactive) {
         RPS._messenger.removeObserver(this.key);
     }
-    delete RPS._observers[this.key];
-    this.initialized = false;
-    //delete this.docs;
+    RPS._observers[this.key] = null;
 };

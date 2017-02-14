@@ -19,14 +19,14 @@ RPS._messenger = {
         //console.log('RPS._messenger.removeObserver; observerKey:', observerKey);
         var channel = RPS._messenger.observers[observerKey];
         if (channel) {
-            delete RPS._messenger.channels[channel][observerKey];
+            RPS._messenger.channels[channel][observerKey] = null;
             if (_.isEmpty(RPS._messenger.channels[channel])) {
                 //console.log('RPS._messenger.removeObserver → remove channel; channel:', channel);
                 RPS._unsub(channel);
                 delete RPS._messenger.channels[channel];
             }
         }
-        delete RPS._messenger.observers[observerKey];
+        RPS._messenger.observers[observerKey] = null;
     },
     onMessage: function (channel, message, runWithFiber) {
         //console.log('RPS._messenger.onMessage; channel, message:', channel, message);
