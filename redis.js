@@ -63,11 +63,11 @@ var createRedisClient = function (conf, key, revive) {
     });*/
 
     client.on('end', function () {
-        client.end();
-        console.error(logLabel + 'end of the Redis? No... Will try to revive!');
-        setTimeout(function () {
-            reviveСlient(key);
-        }, 1000 * 10);
+        //client.end();
+        console.error(logLabel + 'end of the Redis? No...');
+        //setTimeout(function () {
+        //    reviveСlient(key);
+        //}, 1000 * 10);
     });
 
     client.on('subscribe', function (channel, count) {
