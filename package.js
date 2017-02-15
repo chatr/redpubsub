@@ -1,6 +1,6 @@
 Package.describe({
   name: 'chatra:redpubsub',
-  version: '0.9.7',
+  version: '0.9.9',
   // Brief, one-line summary of the package.
   summary: 'Custom pub/sub interface for Meteor on top of Redis',
   // URL to the Git repository containing the source code for this package.

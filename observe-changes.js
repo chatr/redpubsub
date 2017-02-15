@@ -120,7 +120,7 @@ RPS._observer.prototype.callListeners = function (action, id, fields) {
     //console.log('RPS._observer.callListeners');
     _.each(this.listeners, function (callbacks, listenerId) {
         //console.log('RPS._observer.callListeners; listenerId, action, id, fields:', listenerId, action, id, fields);
-        callbacks[action] && callbacks[action](id, fields);
+        callbacks && callbacks[action] && callbacks[action](id, fields);
     });
 };
 
@@ -157,7 +157,7 @@ RPS._observer.prototype.initialAdd = function (listenerId) {
 
     if (callbacks.added) {
         _.each(this.docs, function (doc, id) {
-            callbacks.added(id, _this.projectionFn(doc));
+            doc && callbacks.added(id, _this.projectionFn(doc));
         });
     }
 };
@@ -207,7 +207,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         try {
             var matcher = new Minimongo.Matcher(message.selector);
             ids = _.pluck(_.filter(this.docs, function (doc) {
-                return matcher.documentMatches(doc).result;
+                return doc && matcher.documentMatches(doc).result;
             }), '_id');
         } catch (e) {
             // ignore
@@ -326,7 +326,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         if (rightIds) {
             _.each(_this.docs, function (doc, id) {
                 // remove irrelevant docs
-                if (!_.contains(rightIds, id)) {
+                if (doc && !_.contains(rightIds, id)) {
                     _this.docs[id] = null;
                     try {
                         _this.callListeners('removed', id);
