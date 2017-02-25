@@ -126,8 +126,8 @@ RPS._observer.prototype.callListeners = function (action, id, fields) {
 
 RPS._observer.prototype.removeListener = function (listenerId) {
     //console.log('RPS._observer.removeListener; listenerId:', listenerId);
-    this.listeners[listenerId] = null;
-    if (_.isEmpty(_.compact(this.listeners))) {
+    delete this.listeners[listenerId];
+    if (_.isEmpty(this.listeners)) {
         this.kill();
     }
 };
@@ -370,5 +370,5 @@ RPS._observer.prototype.kill = function () {
     if (!this.options.nonreactive) {
         RPS._messenger.removeObserver(this.key);
     }
-    RPS._observers[this.key] = null;
+    delete RPS._observers[this.key];
 };
