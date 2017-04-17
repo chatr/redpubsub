@@ -84,7 +84,7 @@ var createRedisClient = function (conf, key, revive) {
         try {
             message = JSON.parse(messageString);
         } catch (err) {
-            console.error(logLabel + 'bad message: ' + channel + ': ' + messageString, err.toString());
+            console.error(logLabel + 'failed `JSON.parse`; channel: ' + channel + ', messageString: ' + messageString, err.toString());
         }
 
         if (message && message._serverId !== RPS._serverId) {
@@ -92,6 +92,7 @@ var createRedisClient = function (conf, key, revive) {
                 RPS._messenger.onMessage(channel, message, true);
             } catch (e) {
                 // ignore
+                console.error(logLabel + 'failed `RPS._messenger.onMessage`; channel: ' + channel + ', messageString: ' + messageString, err.toString());
             }
         }
     });

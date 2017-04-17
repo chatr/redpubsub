@@ -181,12 +181,8 @@ RPS._observer.prototype.handleMessage = function (message) {
     // early decisions
     if (!_this.needToFetchAlways && _this.matcher && message.doc && !_this.matcher.documentMatches(message.doc).result) {
         if (_this.docs[message.id]) {
+            _this.callListeners('removed', message.id);
             _this.docs[message.id] = null;
-            try {
-                _this.callListeners('removed', message.id);
-            } catch (e) {
-                // ignore
-            }
         }
         return;
     }
@@ -308,31 +304,22 @@ RPS._observer.prototype.handleMessage = function (message) {
             //console.log('RPS._observer.handleMessage; action, id, fields, finalFields, this.selector:', action, id, fields, finalFields, this.selector);
 
             if (!_.isEmpty(finalFields)) {
-                _this.docs[id] = newDoc;
                 _this.callListeners(action, id, finalFields);
+                _this.docs[id] = newDoc;
             }
         } else if (knownId) {
             //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
+            _this.callListeners('removed', id);
             _this.docs[id] = null;
-
-            try {
-                _this.callListeners('removed', id);
-            } catch (e) {
-                // already removed, ignore it
-            }
         }
 
         if (rightIds) {
             _.each(_this.docs, function (doc, id) {
                 // remove irrelevant docs
                 if (doc && !_.contains(rightIds, id)) {
+                    _this.callListeners('removed', id);
                     _this.docs[id] = null;
-                    try {
-                        _this.callListeners('removed', id);
-                    } catch (e) {
-                        // already removed, ignore it
-                    }
                 }
             });
 
@@ -340,8 +327,8 @@ RPS._observer.prototype.handleMessage = function (message) {
             _.each(rightIds, function (id) {
                 if (!_this.docs[id]) {
                     var doc = _this.collection.findOne({_id: id}, _this.findOptions);
-                    _this.docs[id] = _.extend(doc, _this.options.docsMixin);
                     _this.callListeners('added', id, _this.projectionFn(doc));
+                    _this.docs[id] = _.extend(doc, _this.options.docsMixin);
                 }
             });
         }
