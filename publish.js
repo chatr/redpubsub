@@ -1,43 +1,33 @@
 RPS.publish = function (sub, requests) {
-    ////console.log('RPS.publish; sub, requests:', sub, requests);
-
     requests = _.isArray(requests) ? requests : [requests];
-    var length = requests.length,
-        handlers = [],
-        collectionNames = [];
+    var handlers = [];
 
     _.each(requests, function (request, i) {
         var collectionName = request.collectionName || request.collection._name;
 
-        collectionNames.push(collectionName);
-
-        //console.log('RPS.publish → observeChanges; collectionName:', collectionName);
-
         var handler = RPS.observeChanges(request.collection, request.options, {
             added: function (id, fields) {
-                //console.log('RPS.publish.added; request.options._name, collectionName, id, fields:', request.options._name, collectionName, id, fields);
-                sub.added(collectionName, id, fields);
+                sub && sub.added(collectionName, id, fields);
             },
             changed: function (id, fields) {
-                //console.log('RPS.publish.changed; request.options._name, collectionName, id, fields:', request.options._name, collectionName, id, fields);
-                sub.changed(collectionName, id, fields);
+                sub && sub.changed(collectionName, id, fields);
             },
             removed: function (id) {
-                //console.log('RPS.publish.removed; request.options._name, collectionName, id:', request.options._name, collectionName, id);
-                sub.removed(collectionName, id);
+                sub && sub.removed(collectionName, id);
             }
         });
 
         handlers.push(handler);
     });
 
-    //console.log('RPS.publish → ready; collectionNames:', collectionNames);
     sub.ready();
 
     sub.onStop(function () {
-        _.each(handlers, function (handler) {
-            handler.stop();
-        });
+        while (handlers.length) {
+            handlers.shift().stop();
+        }
+        handlers = null;
+        sub = null;
     });
 
     var docs = _.pluck(handlers, 'docs');

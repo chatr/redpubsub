@@ -20,7 +20,8 @@ RPS.observeChanges = function (collection, options, callbacks) {
     // return stop method
     return {
         stop: function () {
-            observer.removeListener(listenerId);
+            observer && observer.removeListener(listenerId);
+            observer = null;
         },
         docs: observer.docs
     }
