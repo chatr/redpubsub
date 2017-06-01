@@ -90,7 +90,7 @@ var createRedisClient = function (conf, key, revive) {
         if (message && message._serverId !== RPS._serverId) {
             try {
                 RPS._messenger.onMessage(channel, message, true);
-            } catch (e) {
+            } catch (err) {
                 // ignore
                 console.error(logLabel + 'failed `RPS._messenger.onMessage`; channel: ' + channel + ', messageString: ' + messageString, err.toString());
             }
