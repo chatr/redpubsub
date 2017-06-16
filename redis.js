@@ -79,7 +79,6 @@ var createRedisClient = function (conf, key, revive) {
     });
 
     client.on('message', function (channel, messageString) {
-        //console.log(logLabel + channel + ': ' + messageString);
         var message;
         try {
             message = JSON.parse(messageString);
@@ -88,12 +87,7 @@ var createRedisClient = function (conf, key, revive) {
         }
 
         if (message && message._serverId !== RPS._serverId) {
-            try {
-                RPS._messenger.onMessage(channel, message, true);
-            } catch (err) {
-                // ignore
-                console.error(logLabel + 'failed `RPS._messenger.onMessage`; channel: ' + channel + ', messageString: ' + messageString, err.toString());
-            }
+            RPS._messenger.onMessage(channel, message, true);
         }
     });
 

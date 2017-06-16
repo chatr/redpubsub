@@ -7,7 +7,6 @@ RPS.write = function (collection, method, options) {
         collectionName = collection._name,
         config = RPS.config[collectionName] || {},
         channels = !options.noPublish && (options.channels || config.channels || collectionName),
-        channelsIsFunction = _.isFunction(channels),
         idMap = [],
         docs = [];
 
@@ -15,7 +14,7 @@ RPS.write = function (collection, method, options) {
 
     var publish = function (doc, id) {
         var channelsForDoc;
-        if (channelsIsFunction) {
+        if (_.isFunction(channels)) {
             channelsForDoc = channels(doc, options.selector, options.fields);
         } else {
             channelsForDoc = channels;
@@ -30,7 +29,7 @@ RPS.write = function (collection, method, options) {
             doc: method !== 'remove' && doc,
             method: method,
             selector: options.selector,
-            modifier: options.modifier,
+            modifier: options.redModifier || options.modifier,
             withoutMongo: options.withoutMongo,
             id: id || (doc && doc._id),
             ts: Date.now()

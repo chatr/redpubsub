@@ -165,7 +165,6 @@ RPS._observer.prototype.initialAdd = function (listenerId) {
 
 RPS._observer.prototype.onMessage = function (message) {
     if (!this.initiallyFetched) return;
-    //console.log('RPS._observer.onMessage; message:', message);
 
     if (this.paused) {
         this.messageQueue.push(message);
@@ -279,7 +278,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         //console.log('RPS._observer.handleMessage; newDoc, dokIsOk, _.isEqual(newDoc, oldDoc), this.selector:', newDoc, dokIsOk, _.isEqual(newDoc, oldDoc), _this.selector);
 
         if (message.method !== 'remove' && dokIsOk) {
-            if (_this.options.docsMixin) {
+            if (_this.options.docsMixin && message.modifier) {
                 var fieldsFromModifier;
 
                 if (!RPS._containsOperators(message.modifier)) {
