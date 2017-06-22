@@ -81,6 +81,7 @@ RPS._observer = function (collection, options, key) {
     this.channel = options.channel || collection._name;
     this.key = key;
     this.listeners = {};
+    this.actions = {};
     this.docs = {};
     this.lastMethod = {};
     this.lastTs = {};
@@ -111,6 +112,7 @@ RPS._observer.prototype.initialize = function () {
 RPS._observer.prototype.addListener = function (listenerId, callbacks) {
     //console.log('RPS._observer.addListener; listenerId:', listenerId);
     this.listeners[listenerId] = callbacks || {};
+    this.refreshActionsList(listenerId);
     this.pause();
     this.initialFetch();
     this.initialAdd(listenerId);
@@ -130,7 +132,29 @@ RPS._observer.prototype.removeListener = function (listenerId) {
     delete this.listeners[listenerId];
     if (_.isEmpty(this.listeners)) {
         this.kill();
+        this.actions = {};
+    } else {
+        this.refreshActionsList();
     }
+};
+
+RPS._observer.prototype.refreshActionsList = function (listenerId) {
+    var _this = this;
+    if (listenerId) {
+        _.each(this.listeners[listenerId], function (fn, action) {
+            _this.actions[action] = 1;
+        });
+    } else {
+        var actions = {};
+        _.each(this.listeners, function (callbacks, listenerId) {
+            _.each(callbacks, function (fn, action) {
+                actions[action] = 1;
+            });
+        });
+        _this.actions = actions;
+    }
+
+    //console.log('RPS._observer.refreshActionsList → end; this.actions:', this.actions);
 };
 
 RPS._observer.prototype.initialFetch = function () {
@@ -176,22 +200,41 @@ RPS._observer.prototype.onMessage = function (message) {
 RPS._observer.prototype.handleMessage = function (message) {
     var _this = this;
 
-    //console.log('RPS._observer.handleMessage; message, this.selector:', message, this.selector);
+    //console.log('RPS._observer.handleMessage:', this.collection._name, message.method, message.id, message.modifier, this.selector);
 
     // early decisions
-    if (!_this.needToFetchAlways && _this.matcher && message.doc && !_this.matcher.documentMatches(message.doc).result) {
-        if (_this.docs[message.id]) {
-            _this.callListeners('removed', message.id);
-            _this.docs[message.id] = null;
+    if (_this.matcher && message.doc) {
+        if (!_this.matcher.documentMatches(message.doc).result) {
+            // no match with selector
+
+            if (_this.docs[message.id]) {
+                // was here before
+
+                _this.callListeners('removed', message.id);
+                _this.docs[message.id] = null;
+
+                if (!_this.needToFetchAlways) {
+                    // safe to return
+                    return;
+                }
+            } else {
+                // supersafe to return
+                return;
+            }
+        } else {
+            if (_this.docs[message.id] && !_this.actions.changed && _this.needToFetchAlways) {
+                //console.log('RPS._observer.handleMessage; no changed!');
+                // doc is already here, but no actions for `changed` are declared (so don’t care)
+                return;
+            }
         }
-        return;
     }
 
     var rightIds,
         ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
 
     if (_this.needToFetchAlways) {
-        //console.log('RPS._observer.handleMessage → FETCH');
+        //console.log('RPS._observer.handleMessage → FETCH IDs');
         rightIds = this.collection.find(this.selector, this.quickFindOptions).map(function (doc) {
             return doc._id;
         });
@@ -264,7 +307,7 @@ RPS._observer.prototype.handleMessage = function (message) {
         //console.log('RPS._observer.handleMessage; this.collection._name, badTS, needToFetch:', _this.collection._name, badTS, needToFetch);
 
         if (needToFetch) {
-            //console.log('RPS._observer.handleMessage → FETCH');
+            //console.log('RPS._observer.handleMessage → FETCH DOC:', _this.collection._name, id, _this.selector);
             newDoc = _this.collection.findOne(_.extend({}, _this.selector, {_id: id}), _this.findOptions);
         }
 
@@ -301,7 +344,7 @@ RPS._observer.prototype.handleMessage = function (message) {
             }
 
             var finalFields = _this.projectionFn(fields);
-            //console.log('RPS._observer.handleMessage; action, id, fields, finalFields, this.selector:', action, id, fields, finalFields, this.selector);
+            //console.log('RPS._observer.handleMessage; action, id, fields, finalFields:', action, id, fields, finalFields);
 
             if (!_.isEmpty(finalFields)) {
                 _this.callListeners(action, id, finalFields);
