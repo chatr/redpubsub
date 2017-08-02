@@ -1,16 +1,16 @@
 # Redpubsub
 
 Custom pub/sub system that works through channels
-(so we avoid that that every oplog change hits every Meteor instance
-creating an exponential scaling problem). It use Redis to communicate between Meteor processes.
+(avoiding every oplog change hitting every Meteor instance
+creating an exponential scaling problem). It uses Redis to communicate between Meteor processes.
 
-This package implement custom APIs for:
+This package implements custom APIs for:
   1. Writing data into the database and notifying the pub/sub channel(s) about the change.
   2. Data publication mechanism that subscribes to a pub/sub channel instead of using Meteor's oplog tailing.
 
-Most of the performance improvement comes from the fact that we split changes into separate channels, so server publications only need to process changes from channels they are interested in, instead of every single change as is the case in Meteor by default. Also it fetches DB as less as possible, every observer receives `method`, `selector`, and `modifer` and tries to modify docs right in the memory. It does fetch in the case of uncertainty that the operation will be accurate (complicated modifer, race condition, limit, skip, or sort options). Of course redpubsub subscriptions reuse observers with the same options and observers reuse Redis channels.
+Most of the performance improvement comes from the fact that we split changes into separate channels, thus allowing server publications to process changes only from the channels they are interested in instead of every single change as is the case with Meteor by default. Also it fetches DB as little as possible, every observer receives `method`, `selector`, and `modifer` and tries to modify docs right in the memory. It does fetch ВИ in the case of uncertainty that the operation will be accurate (complicated modifier, race condition, `limit`, `skip` or `sort` options). Needless to say, redpubsub subscriptions reuse observers with the same options and observers reuse Redis channels.
 
-This all works well at [Chatra](https://chatra.io/). Performance improved to a point where we no longer worry about performance (not any time soon at least). Right now ≈300 active sessions give about 5% CPU usage on a single machine, before this implementation ≈150 sessions cost us about 75% of CPU.
+This all works well in [Chatra](https://chatra.io/). Performance improved to a point where we no longer worry about performance (not any time soon at least). Right now ≈300 active sessions give about 5% CPU load on a single machine, before this implementation ≈150 sessions cost us about 75% of CPU.
 
 ## Installation
 
@@ -20,8 +20,8 @@ meteor add chatra:redpubsub
 
 ### Redis
 
-This package uses Redis as the communicate channel between nodes. It uses pub/sub functionality of Redis.
-So you need to have redis-server running locally during development and `RPS_REDIS_URL` environment variable in production.
+This package uses Redis as the communication channel between nodes. It uses pub/sub functionality of Redis.
+You need to have redis-server running locally during development and `RPS_REDIS_URL` environment variable in production.
 
 If you are new to redis, [read this guide](http://redis.io/topics/quickstart).
 
@@ -58,7 +58,7 @@ RPS.write(Typings, 'upsert', {
 });
 ```
 
-Note that if you call `RPS.write` only on the client (outside universal methods for example) channels will be not notified about the change.
+Note that if you call `RPS.write` only on the client (outside of the universal methods, for example) channels won’t be notified about the change.
 
 ### RPS.config[collectionName] = options; _(server)_
 Configure what channel(s) to notify via `RPS.config` object:
@@ -68,7 +68,7 @@ RPS.config.testCollection = {
 }
 ```
 
-Find right channel dinamically:
+Define channel dinamically:
 ```js
 RPS.config.Clients = {
   channels: function (doc, selector, fields) {
@@ -77,7 +77,7 @@ RPS.config.Clients = {
 }
 ```
 
-Note that `selector` in above example is take from `RPS.write` call.
+Note that `selector` in above example is taken from `RPS.write` call.
 
 To compute the chanell name use `doc`, `selector` or custom `fields` property :
 ```js
@@ -109,7 +109,7 @@ Meteor.publish('messages', function (clientId) {
             selector: {clientId: clientId},
             options: {fields: {secretAdminNote: 0}},
             
-            // changes from what channel to listen
+            // channel to listen to
             channel: 'messagesByClientId:' + clientId,
         }
     });
