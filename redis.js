@@ -70,13 +70,13 @@ var createRedisClient = function (conf, key, revive) {
         //}, 1000 * 10);
     });
 
-    client.on('subscribe', function (channel, count) {
-        console.info(logLabel + 'subscribed to "' +  channel + '"' + ' (' + count + ')');
-    });
-
-    client.on('unsubscribe', function (channel, count) {
-        console.info(logLabel + 'unsubscribed from "' +  channel + '"' + ' (' + count + ')');
-    });
+    // client.on('subscribe', function (channel, count) {
+    //     console.info(logLabel + 'subscribed to "' +  channel + '"' + ' (' + count + ')');
+    // });
+    //
+    // client.on('unsubscribe', function (channel, count) {
+    //     console.info(logLabel + 'unsubscribed from "' +  channel + '"' + ' (' + count + ')');
+    // });
 
     client.on('message', function (channel, messageString) {
         var message;
@@ -151,9 +151,9 @@ var reviveСlient = function (key) {
 };
 
 var resubscribe = function () {
-    console.info('RPS: resubscribe');
+    //console.info('RPS: resubscribe');
     _.each(RPS._messenger.channels, function (observerKeys, channel) {
-        console.info('RPS: resubscribe to channel: ' + channel);
+        //console.info('RPS: resubscribe to channel: ' + channel);
         RPS._sub(channel);
     });
 };

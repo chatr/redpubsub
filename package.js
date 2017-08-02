@@ -1,6 +1,6 @@
 Package.describe({
   name: 'chatra:redpubsub',
-  version: '0.9.19',
+  version: '0.9.21',
   // Brief, one-line summary of the package.
   summary: 'Custom pub/sub interface for Meteor on top of Redis',
   // URL to the Git repository containing the source code for this package.
@@ -16,10 +16,10 @@ Npm.depends({
 });
 
 Package.onUse(function(api) {
-  api.versionsFrom('1.2.1');
+  api.versionsFrom('METEOR@1.5.1');
 
-  api.use(['random', 'underscore', 'ddp-server', 'ejson']);
-  api.use(['minimongo', 'diff-sequence'], 'server');
+  api.use(['random', 'underscore', 'ejson']);
+  api.use(['ddp-server', 'minimongo', 'diff-sequence'], 'server');
 
   api.addFiles('namespace.js');
   api.addFiles(['utils-server.js', 'redis.js'], 'server');
@@ -30,8 +30,8 @@ Package.onUse(function(api) {
   api.export('RPS');
 });
 
-Package.onTest(function(api) {
-  api.use('tinytest');
-  api.use('chatra:redpubsub');
-  api.addFiles('redpubsub-tests.js');
-});
+// Package.onTest(function(api) {
+//   api.use('tinytest');
+//   api.use('chatra:redpubsub');
+//   api.addFiles('redpubsub-tests.js');
+// });
