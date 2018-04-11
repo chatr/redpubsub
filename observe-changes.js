@@ -211,7 +211,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 // was here before
 
                 _this.callListeners('removed', message.id);
-                _this.docs[message.id] = null;
+                delete _this.docs[message.id];
 
                 if (!_this.needToFetchAlways) {
                     // safe to return
@@ -354,7 +354,7 @@ RPS._observer.prototype.handleMessage = function (message) {
             //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
             _this.callListeners('removed', id);
-            _this.docs[id] = null;
+            delete _this.docs[id];
         }
 
         if (rightIds) {
@@ -362,7 +362,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 // remove irrelevant docs
                 if (doc && !_.contains(rightIds, id)) {
                     _this.callListeners('removed', id);
-                    _this.docs[id] = null;
+                    delete _this.docs[id];
                 }
             });
 
