@@ -26,7 +26,6 @@ RPS.publish = function (sub, requests) {
         while (handlers.length) {
             handlers.shift().stop();
         }
-        handlers = null;
         sub = null;
     });
 
