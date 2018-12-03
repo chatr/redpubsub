@@ -1,11 +1,11 @@
 RPS.publish = function (sub, requests) {
     requests = _.isArray(requests) ? requests : [requests];
-    var handlers = [];
+    const handlers = [];
 
     _.each(requests, function (request, i) {
-        var collectionName = request.collectionName || request.collection._name;
+        const collectionName = request.collectionName || request.collection._name;
 
-        var handler = RPS.observeChanges(request.collection, request.options, {
+        const handler = RPS.observeChanges(request.collection, request.options, {
             added: function (id, fields) {
                 sub && sub.added(collectionName, id, fields);
             },

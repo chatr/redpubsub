@@ -1,23 +1,22 @@
 RPS._observers = {};
 
 RPS.observeChanges = function (collection, options, callbacks) {
-    //console.log('RPS.observeChanges');
-
     options = options || {};
 
-    var listenerId = Random.id(),
-        collectionName = collection._name,
-        cursorDescription = {
+    const listenerId = Random.id();
+    const collectionName = collection._name;
+    const cursorDescription = {
             collectionName: collectionName,
             options: _.extend(options, {selector: Mongo.Collection._rewriteSelector(options.selector || {})})
-        },
-        observerKey = JSON.stringify(cursorDescription),
-        observer = RPS._observers[observerKey] || (RPS._observers[observerKey] = new RPS._observer(collection, options, observerKey));
+        };
+    const observerKey = JSON.stringify(cursorDescription);
+    let observer = RPS._observers[observerKey] || (RPS._observers[observerKey] = new RPS._observer(collection, options, observerKey));
 
     // initial fetch, if needed or take it from cache (pause incoming messages, while initial add)
     observer.addListener(listenerId, callbacks);
 
     // return stop method
+    // todo: check for memory leak
     return {
         stop: function () {
             observer && observer.removeListener(listenerId);
@@ -28,9 +27,7 @@ RPS.observeChanges = function (collection, options, callbacks) {
 };
 
 RPS._observer = function (collection, options, key) {
-    //console.log('RPS._observer');
-
-    var _this = this;
+    const _this = this;
 
     this.collection = collection;
     this.options = options;
@@ -43,7 +40,7 @@ RPS._observer = function (collection, options, key) {
     this.projectionFields = _.clone(this.findOptions.fields);
 
     if (this.options.docsMixin && this.projectionFields) {
-        var including = null; // Unknown
+        let including = null; // Unknown
 
         _.each(this.projectionFields, function (rule, keyPath) {
             if (keyPath === '_id') return;
@@ -66,8 +63,6 @@ RPS._observer = function (collection, options, key) {
             }
         });
     }
-
-    //console.log('RPS: this.projectionFields:', this.projectionFields);
 
     this.projectionFn = this.projectionFields ? LocalCollection._compileProjection(this.projectionFields) : function (doc) { return doc };
 
@@ -100,7 +95,6 @@ RPS._observer = function (collection, options, key) {
 // initialize, subscribe to channel
 RPS._observer.prototype.initialize = function () {
     if (this.initialized) return;
-    //console.log('RPS._observer.initialize');
 
     if (!this.options.nonreactive) {
         RPS._messenger.addObserver(this.key, this.channel);
@@ -110,7 +104,6 @@ RPS._observer.prototype.initialize = function () {
 };
 
 RPS._observer.prototype.addListener = function (listenerId, callbacks) {
-    //console.log('RPS._observer.addListener; listenerId:', listenerId);
     this.listeners[listenerId] = callbacks || {};
     this.refreshActionsList(listenerId);
     this.pause();
@@ -120,15 +113,12 @@ RPS._observer.prototype.addListener = function (listenerId, callbacks) {
 };
 
 RPS._observer.prototype.callListeners = function (action, id, fields) {
-    //console.log('RPS._observer.callListeners');
     _.each(this.listeners, function (callbacks, listenerId) {
-        //console.log('RPS._observer.callListeners; listenerId, action, id, fields:', listenerId, action, id, fields);
         callbacks && callbacks[action] && callbacks[action](id, fields);
     });
 };
 
 RPS._observer.prototype.removeListener = function (listenerId) {
-    //console.log('RPS._observer.removeListener; listenerId:', listenerId);
     delete this.listeners[listenerId];
     if (_.isEmpty(this.listeners)) {
         this.kill();
@@ -139,13 +129,13 @@ RPS._observer.prototype.removeListener = function (listenerId) {
 };
 
 RPS._observer.prototype.refreshActionsList = function (listenerId) {
-    var _this = this;
+    const _this = this;
     if (listenerId) {
         _.each(this.listeners[listenerId], function (fn, action) {
             _this.actions[action] = 1;
         });
     } else {
-        var actions = {};
+        const actions = {};
         _.each(this.listeners, function (callbacks, listenerId) {
             _.each(callbacks, function (fn, action) {
                 actions[action] = 1;
@@ -153,20 +143,15 @@ RPS._observer.prototype.refreshActionsList = function (listenerId) {
         });
         _this.actions = actions;
     }
-
-    //console.log('RPS._observer.refreshActionsList → end; this.actions:', this.actions);
 };
 
 RPS._observer.prototype.initialFetch = function () {
     if (this.initiallyFetched) return;
-    //console.log('RPS._observer.initialFetch');
 
     if (!this.options.withoutMongo) {
-        //console.log('RPS._observer.initialFetch → FETCH');
-        var _this = this;
+        const _this = this;
 
         this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
-            //console.log('RPS._observer.initialFetch → FETCH; doc._id:', doc._id);
             _this.docs[doc._id] = _.extend(doc, _this.options.docsMixin);
         });
     }
@@ -175,10 +160,8 @@ RPS._observer.prototype.initialFetch = function () {
 };
 
 RPS._observer.prototype.initialAdd = function (listenerId) {
-    //console.log('RPS._observer.initialAdd; listenerId:', listenerId);
-
-    var _this = this;
-    var callbacks = this.listeners[listenerId];
+    const _this = this;
+    const callbacks = this.listeners[listenerId];
 
     if (callbacks.added) {
         _.each(this.docs, function (doc, id) {
@@ -198,9 +181,7 @@ RPS._observer.prototype.onMessage = function (message) {
 };
 
 RPS._observer.prototype.handleMessage = function (message) {
-    var _this = this;
-
-    //console.log('RPS._observer.handleMessage:', this.collection._name, message.method, message.id, message.modifier, this.selector);
+    const _this = this;
 
     // early decisions
     if (_this.matcher && message.doc) {
@@ -223,35 +204,31 @@ RPS._observer.prototype.handleMessage = function (message) {
             }
         } else {
             if (_this.docs[message.id] && !_this.actions.changed && _this.needToFetchAlways) {
-                //console.log('RPS._observer.handleMessage; no changed!');
                 // doc is already here, but no actions for `changed` are declared (so don’t care)
                 return;
             }
         }
     }
 
-    var rightIds,
-        ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
+    let rightIds;
+    let ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
 
     if (_this.needToFetchAlways) {
-        //console.log('RPS._observer.handleMessage → FETCH IDs');
         rightIds = this.collection.find(this.selector, this.quickFindOptions).map(function (doc) {
             return doc._id;
         });
     }
 
-    //console.log('RPS._observer.handleMessage; message.withoutMongo, ids:', message.withoutMongo, ids);
     if (message.withoutMongo && !ids) {
-        //console.log('RPS._observer.handleMessage; this.docs, message.selector:', this.docs, message.selector);
         try {
-            var matcher = new Minimongo.Matcher(message.selector);
+            const matcher = new Minimongo.Matcher(message.selector);
+
             ids = _.pluck(_.filter(this.docs, function (doc) {
                 return doc && matcher.documentMatches(doc).result;
             }), '_id');
         } catch (e) {
             // ignore
         }
-        //console.log('RPS._observer.handleMessage → after Minimongo.Matcher; ids:', ids);
     }
 
     if (!ids || !ids.length) return;
@@ -263,26 +240,20 @@ RPS._observer.prototype.handleMessage = function (message) {
             lastMethod = _this.lastMethod[id];
 
         _this.lastTs[id] = badTS ? lastTs : message.ts;
-    
-        //if (badTS) {
-        //    console.warn('RPS: RACE CONDITION! Don’t worry will fix it');
-        //}
 
         if (badTS
             && lastMethod
             && ((message.method !== 'remove' && lastMethod === 'remove') || (message.method === 'remove' && _.contains(['insert', 'upsert'], lastMethod)))) {
-            //console.warn('RPS: SKIP MESSAGE! All fine already');
             return;
         }
 
         _this.lastMethod[id] = message.method;
 
-        var oldDoc = _this.docs[id],
-            knownId = !!oldDoc,
-            isRightId = !rightIds || _.contains(rightIds, id),
-            newDoc = message.doc;
+        const oldDoc = _this.docs[id];
+        const knownId = !!oldDoc;
+        const isRightId = !rightIds || _.contains(rightIds, id);
 
-        //console.log('RPS._observer.handleMessage; oldDoc, this.selector:', oldDoc, _this.selector);
+        let newDoc = message.doc;
 
         if (!newDoc) {
             if (message.method === 'insert' && !badTS) {
@@ -302,27 +273,22 @@ RPS._observer.prototype.handleMessage = function (message) {
             } catch (e) {}
         }
 
-        var needToFetch = !newDoc && isRightId && message.method !== 'remove';
-
-        //console.log('RPS._observer.handleMessage; this.collection._name, badTS, needToFetch:', _this.collection._name, badTS, needToFetch);
+        const needToFetch = !newDoc && isRightId && message.method !== 'remove';
 
         if (needToFetch) {
-            //console.log('RPS._observer.handleMessage → FETCH DOC:', _this.collection._name, id, _this.selector);
             newDoc = _this.collection.findOne(_.extend({}, _this.selector, {_id: id}), _this.findOptions);
         }
 
-        var dokIsOk = newDoc
+        const dokIsOk = newDoc
             && isRightId
             && (message.withoutMongo
                 || needToFetch
                 || (rightIds && _.contains(rightIds, id))
                 || (_this.matcher ? _this.matcher.documentMatches(newDoc).result : _this.collection.find(_.extend({}, _this.selector, {_id: id}), _this.quickFindOptions).count()));
 
-        //console.log('RPS._observer.handleMessage; newDoc, dokIsOk, _.isEqual(newDoc, oldDoc), this.selector:', newDoc, dokIsOk, _.isEqual(newDoc, oldDoc), _this.selector);
-
         if (message.method !== 'remove' && dokIsOk) {
             if (_this.options.docsMixin && message.modifier) {
-                var fieldsFromModifier;
+                let fieldsFromModifier;
 
                 if (!RPS._containsOperators(message.modifier)) {
                     fieldsFromModifier = _.keys(message.modifier);
@@ -333,7 +299,8 @@ RPS._observer.prototype.handleMessage = function (message) {
             }
 
             // added or changed
-            var action, fields;
+            let action;
+            let fields;
 
             if (knownId) {
                 action = 'changed';
@@ -343,15 +310,13 @@ RPS._observer.prototype.handleMessage = function (message) {
                 fields = newDoc;
             }
 
-            var finalFields = _this.projectionFn(fields);
-            //console.log('RPS._observer.handleMessage; action, id, fields, finalFields:', action, id, fields, finalFields);
+            const finalFields = _this.projectionFn(fields);
 
             if (!_.isEmpty(finalFields)) {
                 _this.callListeners(action, id, finalFields);
                 _this.docs[id] = newDoc;
             }
         } else if (knownId) {
-            //console.log('RPS._observer.handleMessage; removed, id, this.collection._name:', id, this.collection._name);
             // removed
             _this.callListeners('removed', id);
             delete _this.docs[id];
@@ -379,17 +344,14 @@ RPS._observer.prototype.handleMessage = function (message) {
 };
 
 RPS._observer.prototype.pause = function () {
-    //console.log('RPS._observer.pause');
     this.paused = true;
 };
 
 RPS._observer.prototype.resume = function () {
-    //console.log('RPS._observer.resume → start');
     while (this.messageQueue.length) {
         this.handleMessage(this.messageQueue.shift(), true);
     }
     this.paused = false;
-    //console.log('RPS._observer.resume → end');
 };
 
 // kill, unsubscribe

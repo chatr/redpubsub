@@ -2,29 +2,26 @@ RPS.write = function (collection, method, options) {
     options = options || {};
     options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : options.doc || {};
 
-    var _id = options.selector._id,
-        _idIsId = LocalCollection._selectorIsId(_id),
-        collectionName = collection._name,
-        config = RPS.config[collectionName] || {},
-        channels = !options.noPublish && (options.channels || config.channels || collectionName),
-        idMap = [],
-        docs = [];
+    const _id = options.selector._id;
+    const _idIsId = LocalCollection._selectorIsId(_id);
+    const collectionName = collection._name;
+    const config = RPS.config[collectionName] || {};
+    const channels = !options.noPublish && (options.channels || config.channels || collectionName);
 
-    //console.log('RPS.write; collectionName, method, options:', collectionName, method, options, channels);
+    let idMap = [];
+    let docs = [];
 
-    var publish = function (doc, id) {
-        var channelsForDoc;
+    function publish (doc, id) {
+        let channelsForDoc;
         if (_.isFunction(channels)) {
-            channelsForDoc = channels(doc, options.selector, options.fields);
+            channelsForDoc = channels(doc, options.selector);
         } else {
             channelsForDoc = channels;
         }
 
-        //console.log('RPS.write → publish; doc, id, channels:', doc, id, channels);
-
         if (!channelsForDoc) return;
 
-        var message = {
+        const message = {
             _serverId: RPS._serverId,
             doc: method !== 'remove' && doc,
             method: method,
@@ -33,8 +30,8 @@ RPS.write = function (collection, method, options) {
             withoutMongo: options.withoutMongo,
             id: id || (doc && doc._id),
             ts: Date.now()
-        },
-        messageString = JSON.stringify(message);
+        };
+        const messageString = JSON.stringify(message);
 
         _.each(_.isArray(channelsForDoc) ? channelsForDoc : [channelsForDoc], function (channel) {
             if (!channel) return;
@@ -42,13 +39,13 @@ RPS.write = function (collection, method, options) {
             RPS._messenger.onMessage(channel, message);
             RPS._pub(channel, messageString);
         });
-    };
+    }
 
-    var afterWrite = function (res) {
+    function afterWrite (res) {
         if (!channels) return res;
 
         if (options.withoutMongo) {
-            var id = _idIsId ? _id : (method === 'insert' || method === 'upsert') && Random.id();
+            const id = _idIsId ? _id : (method === 'insert' || method === 'upsert') && Random.id();
             publish(null, id);
         } else if (method === 'remove') {
              docs.forEach(function (doc) {
@@ -60,7 +57,7 @@ RPS.write = function (collection, method, options) {
             } else if (method === 'upsert' && res.insertedId) {
                 docs = collection.find({_id: res.insertedId});
             } else if (method === 'insert') {
-                var doc = options.selector;
+                const doc = options.selector;
                 docs = [doc];
                 idMap = [doc._id = doc._id || res]
             }
@@ -71,13 +68,13 @@ RPS.write = function (collection, method, options) {
         }
 
         return res;
-    };
+    }
 
     if (options.noWrite) {
         publish(options.doc);
     } else {
         if (channels && method !== 'insert' && !options.withoutMongo) {
-            var findOptions = {};
+            const findOptions = {};
 
             if (method !== 'remove') {
                 if (_idIsId) {
@@ -100,8 +97,8 @@ RPS.write = function (collection, method, options) {
 
         }
 
-        var callback = _.last(_.toArray(arguments)),
-            async = _.isFunction(callback);
+        const callback = _.last(_.toArray(arguments));
+        const async = _.isFunction(callback);
 
         if (async && !options.withoutMongo) {
             return RPS._write(collection, method, options, function (err, res) {
@@ -111,7 +108,7 @@ RPS.write = function (collection, method, options) {
                 callback(err, res);
             });
         } else {
-            var res = !options.withoutMongo && RPS._write(collection, method, options);
+            const res = !options.withoutMongo && RPS._write(collection, method, options);
             return afterWrite(res);
         }
     }

@@ -71,7 +71,7 @@ RPS.config.testCollection = {
 Define channel dinamically:
 ```js
 RPS.config.Clients = {
-  channels: function (doc, selector, fields) {
+  channels: function (doc, selector) {
     return 'clientById:' + doc._id;
   }
 }
@@ -79,23 +79,13 @@ RPS.config.Clients = {
 
 Note that `selector` in above example is taken from `RPS.write` call.
 
-To compute the chanell name use `doc`, `selector` or custom `fields` property :
+To compute the chanell name use `doc` and `selector` properties:
 ```js
 RPS.config.Clients = {
-  fetchFields: ['hostId'],
-  channels: function (doc, selector, fields) {
-    return (doc && doc.hostId && 'clientsByHostId:' + doc.hostId)
-      || (fields && fields.hostId && 'clientsByHostId:' + fields.hostId);
+  channels: function (doc, selector) {
+    return doc && doc.hostId && 'clientsByHostId:' + doc.hostId;
   }
 }
-```
-
-Pass needed `fields` when calling `RPS.write`:
-```js
-RPS.write(Clients, 'remove', {
-    selector: {_id: clientId},
-    fields: {hostId: hostId}
-});
 ```
 
 ### RPS.publish(subscription, [request1, request2...]) _(server)_
@@ -108,7 +98,7 @@ Meteor.publish('messages', function (clientId) {
         options: {
             selector: {clientId: clientId},
             options: {fields: {secretAdminNote: 0}},
-            
+
             // channel to listen to
             channel: 'messagesByClientId:' + clientId,
         }
