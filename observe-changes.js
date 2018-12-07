@@ -287,7 +287,7 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         if (badTS
             && lastMethod
-            && ((message.method !== 'remove' && lastMethod === 'remove') || (message.method === 'remove' && _.contains(['insert', 'upsert'], lastMethod)))) {
+            && ((message.method !== 'remove' && lastMethod === 'remove') || (message.method === 'remove' && (lastMethod === 'insert' || lastMethod === 'upsert')))) {
             return;
         }
 
@@ -318,7 +318,7 @@ RPS._observer.prototype.handleMessage = function (message) {
             }
         }
 
-        if (!newDoc && _.isObject(oldDoc) && _.contains(['update', 'upsert'], message.method) && isRightId && !badTS) {
+        if (!newDoc && _.isObject(oldDoc) && (message.method === 'update' || message.method === 'upsert') && isRightId && !badTS) {
             try {
                 newDoc = EJSON.clone(oldDoc);
                 LocalCollection._modify(newDoc, message.modifier);
@@ -335,7 +335,6 @@ RPS._observer.prototype.handleMessage = function (message) {
             && isRightId
             && (message.withoutMongo
                 || needToFetch
-                || (fetchedRightIds && _.contains(fetchedRightIds, id))
                 || (_this.matcher ? (!!message.doc || _this.matcher.documentMatches(newDoc).result) : _this.collection.find(_.extend({}, _this.selector, {_id: id}), _this.quickFindOptions).count()));
 
         if (message.method !== 'remove' && dokIsOk) {
