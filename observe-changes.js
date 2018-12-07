@@ -10,6 +10,7 @@ RPS.observeChanges = function (collection, options, callbacks) {
             options: _.extend(options, {selector: Mongo.Collection._rewriteSelector(options.selector || {})})
         };
     const observerKey = JSON.stringify(cursorDescription);
+
     let observer = RPS._observers[observerKey] || (RPS._observers[observerKey] = new RPS._observer(collection, options, observerKey));
 
     // initial fetch, if needed or take it from cache (pause incoming messages, while initial add)
@@ -26,25 +27,34 @@ RPS.observeChanges = function (collection, options, callbacks) {
     }
 };
 
+function topLevelPath (path) {
+    if (path.indexOf('.') !== -1) {
+        return path.substring(0, path.indexOf('.'));
+    } else {
+        return path;
+    }
+}
+
 RPS._observer = function (collection, options, key) {
     const _this = this;
 
     this.collection = collection;
     this.options = options;
+    this.noCache = options.noCache;
     this.selector = options.selector;
     this.findOptions = options.options || {};
     this.findOptions.fields = this.findOptions.fields || {};
     this.needToFetchAlways = this.findOptions.limit && !options.lazyLimit;
     this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
 
-    this.projectionFields = _.clone(this.findOptions.fields);
+    this.projectionFields = EJSON.clone(this.findOptions.fields);
     this.projectionIncluding = null; // Unknown
 
     if (this.projectionFields) {
         this.projectionTopFields = {};
 
-        _.each(this.projectionFields, function (rule, keyPath) {
-            if (keyPath === '_id') return;
+        _.each(this.projectionFields, function (rule, path) {
+            if (path === '_id') return;
 
             rule = !!rule;
 
@@ -57,11 +67,7 @@ RPS._observer = function (collection, options, key) {
                 throw MinimongoError('You cannot currently mix including and excluding fields.');
             }
 
-            if (keyPath.indexOf('.') !== -1) {
-                keyPath = keyPath.substring(0, keyPath.indexOf('.'));
-            }
-
-            _this.projectionTopFields[keyPath] = rule;
+            _this.projectionTopFields[topLevelPath(path)] = rule;
         });
 
         if (this.options.docsMixin) {
@@ -167,22 +173,24 @@ RPS._observer.prototype.initialFetch = function () {
         });
     }
 
-    this.initiallyFetched = true;
+    this.initiallyFetched = !this.noCache;
 };
 
 RPS._observer.prototype.initialAdd = function (listenerId) {
     const _this = this;
     const callbacks = this.listeners[listenerId];
 
-    if (callbacks.added) {
-        _.each(this.docs, function (doc, id) {
-            doc && callbacks.added(id, _this.projectionFn(doc));
-        });
-    }
+    _.each(this.docs, function (doc, id) {
+        if (!doc) return;
+        callbacks.added && callbacks.added(id, _this.projectionFn(doc));
+        if (_this.noCache) {
+            _this.docs[id] = true; // free memory
+        }
+    });
 };
 
 RPS._observer.prototype.onMessage = function (message) {
-    if (!this.initiallyFetched) return;
+    if (!this.initiallyFetched && !this.noCache) return;
 
     if (this.paused) {
         this.messageQueue.push(message);
@@ -214,6 +222,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 return;
             }
         } else {
+            // matches selector
             if (_this.docs[message.id] && !_this.needToFetchAlways) {
                 // doc is already here
                 if (!_this.actions.changed) {
@@ -225,14 +234,10 @@ RPS._observer.prototype.handleMessage = function (message) {
 
                     _.each(message.modifier, function (params, op) {
                         if (op.charAt(0) === '$') {
-                            _.each(params, function (value, field) {
+                            _.each(params, function (value, path) {
                                 // treat dotted fields as if they are replacing their top-level part
-                                if (field.indexOf('.') !== -1) {
-                                    field = field.substring(0, field.indexOf('.'));
-                                }
-
                                 // record the field we are trying to change
-                                modifiedFields[field] = true;
+                                modifiedFields[topLevelPath(path)] = true;
                             });
                         }
                     });
@@ -294,6 +299,14 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         let newDoc = message.doc;
 
+        if (_this.noCache && newDoc && message.modifier && message.modifier.$unset) {
+            _.each(message.modifier.$unset, function (value, path) {
+                if (value && path.indexOf('.') === -1) {
+                    newDoc[path] = undefined;
+                }
+            });
+        }
+
         if (!newDoc) {
             if (message.method === 'insert' && !badTS) {
                 newDoc = _.extend({}, message.selector, {_id: id});
@@ -305,7 +318,7 @@ RPS._observer.prototype.handleMessage = function (message) {
             }
         }
 
-        if (!newDoc && oldDoc && _.contains(['update', 'upsert'], message.method) && isRightId && !badTS) {
+        if (!newDoc && _.isObject(oldDoc) && _.contains(['update', 'upsert'], message.method) && isRightId && !badTS) {
             try {
                 newDoc = EJSON.clone(oldDoc);
                 LocalCollection._modify(newDoc, message.modifier);
@@ -336,7 +349,7 @@ RPS._observer.prototype.handleMessage = function (message) {
 
             if (knownId) {
                 action = 'changed';
-                fields = DiffSequence.makeChangedFields(newDoc, oldDoc);
+                fields = _this.noCache ? newDoc : DiffSequence.makeChangedFields(newDoc, oldDoc);
             } else {
                 action = 'added';
                 fields = newDoc;
@@ -348,7 +361,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 _this.callListeners(action, id, finalFields);
             }
 
-            _this.docs[id] = newDoc;
+            _this.docs[id] = (!_this.noCache || message.withoutMongo) ? newDoc : true;
         } else if (knownId) {
             // removed
             _this.callListeners('removed', id);
@@ -368,8 +381,11 @@ RPS._observer.prototype.handleMessage = function (message) {
             _.each(fetchedRightIds, function (id) {
                 if (!_this.docs[id]) {
                     var doc = _this.collection.findOne({_id: id}, _this.findOptions);
+                    if (_this.options.docsMixin) {
+                        _.extend(doc, _this.options.docsMixin);
+                    }
                     _this.callListeners('added', id, _this.projectionFn(doc));
-                    _this.docs[id] = _this.options.docsMixin ? _.extend(doc, _this.options.docsMixin) : doc;
+                    _this.docs[id] = !!_this.noCache || doc;
                 }
             });
         }
