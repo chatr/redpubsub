@@ -14,7 +14,7 @@ RPS.write = function (collection, method, options) {
     function publish (doc, id) {
         let channelsForDoc;
         if (_.isFunction(channels)) {
-            channelsForDoc = channels(doc, options.selector);
+            channelsForDoc = channels(doc, options.selector, options.fields);
         } else {
             channelsForDoc = channels;
         }
