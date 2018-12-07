@@ -38,30 +38,41 @@ RPS._observer = function (collection, options, key) {
     this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
 
     this.projectionFields = _.clone(this.findOptions.fields);
+    this.projectionIncluding = null; // Unknown
 
-    if (this.options.docsMixin && this.projectionFields) {
-        let including = null; // Unknown
+    if (this.projectionFields) {
+        this.projectionTopFields = {};
 
         _.each(this.projectionFields, function (rule, keyPath) {
             if (keyPath === '_id') return;
 
             rule = !!rule;
-            if (including === null) {
-                including = rule;
+
+            if (_this.projectionIncluding === null) {
+                _this.projectionIncluding = rule;
             }
-            if (including !== rule) {
+
+            if (_this.projectionIncluding !== rule) {
                 // This error message is copied from MongoDB shell
-                throw MinimongoError("You cannot currently mix including and excluding fields.");
+                throw MinimongoError('You cannot currently mix including and excluding fields.');
             }
+
+            if (keyPath.indexOf('.') !== -1) {
+                keyPath = keyPath.substring(0, keyPath.indexOf('.'));
+            }
+
+            _this.projectionTopFields[keyPath] = rule;
         });
 
-        _.each(this.options.docsMixin, function (value, key) {
-            if (including) {
-                _this.projectionFields[key] = 1;
-            } else {
-                delete _this.projectionFields[key];
-            }
-        });
+        if (this.options.docsMixin) {
+            _.each(this.options.docsMixin, function (value, key) {
+                if (_this.projectionIncluding) {
+                    _this.projectionFields[key] = 1;
+                } else {
+                    delete _this.projectionFields[key];
+                }
+            });
+        }
     }
 
     this.projectionFn = this.projectionFields ? LocalCollection._compileProjection(this.projectionFields) : function (doc) { return doc };
@@ -86,7 +97,7 @@ RPS._observer = function (collection, options, key) {
     // part of the observeChanges API
     if (this.findOptions.fields._id === 0 ||
         this.findOptions.fields._id === false) {
-        throw Error("You may not observe a cursor with {fields: {_id: 0}}");
+        throw Error('You may not observe a cursor with {fields: {_id: 0}}');
     }
 
     this.initialize();
@@ -152,7 +163,7 @@ RPS._observer.prototype.initialFetch = function () {
         const _this = this;
 
         this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
-            _this.docs[doc._id] = _.extend(doc, _this.options.docsMixin);
+            _this.docs[doc._id] = _this.options.docsMixin ? _.extend(doc, _this.options.docsMixin) : doc;
         });
     }
 
@@ -192,7 +203,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 // was here before
 
                 _this.callListeners('removed', message.id);
-                delete _this.docs[message.id];
+                _this.docs[message.id] = null;
 
                 if (!_this.needToFetchAlways) {
                     // safe to return
@@ -203,18 +214,46 @@ RPS._observer.prototype.handleMessage = function (message) {
                 return;
             }
         } else {
-            if (_this.docs[message.id] && !_this.actions.changed && _this.needToFetchAlways) {
-                // doc is already here, but no actions for `changed` are declared (so don’t care)
-                return;
+            if (_this.docs[message.id] && !_this.needToFetchAlways) {
+                // doc is already here
+                if (!_this.actions.changed) {
+                    // but no actions for `changed` are declared (so don’t care)
+                    return;
+                } else if (_this.projectionIncluding && message.modifier) {
+                    // compute modified fields
+                    const modifiedFields = {};
+
+                    _.each(message.modifier, function (params, op) {
+                        if (op.charAt(0) === '$') {
+                            _.each(params, function (value, field) {
+                                // treat dotted fields as if they are replacing their top-level part
+                                if (field.indexOf('.') !== -1) {
+                                    field = field.substring(0, field.indexOf('.'));
+                                }
+
+                                // record the field we are trying to change
+                                modifiedFields[field] = true;
+                            });
+                        }
+                    });
+
+                    const relevantModifier = _.some(modifiedFields, function (value, field) {
+                        return _this.projectionTopFields[field];
+                    });
+
+                    if (!relevantModifier) {
+                        return;
+                    }
+                }
             }
         }
     }
 
-    let rightIds;
-    let ids = !message.id || _.isArray(message.id) ? message.id : [message.id];
+    let fetchedRightIds;
+    let ids = (!message.id || _.isArray(message.id)) ? message.id : [message.id];
 
     if (_this.needToFetchAlways) {
-        rightIds = this.collection.find(this.selector, this.quickFindOptions).map(function (doc) {
+        fetchedRightIds = this.collection.find(this.selector, this.quickFindOptions).map(function (doc) {
             return doc._id;
         });
     }
@@ -251,7 +290,7 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         const oldDoc = _this.docs[id];
         const knownId = !!oldDoc;
-        const isRightId = !rightIds || _.contains(rightIds, id);
+        const isRightId = !fetchedRightIds || _.contains(fetchedRightIds, id);
 
         let newDoc = message.doc;
 
@@ -283,19 +322,12 @@ RPS._observer.prototype.handleMessage = function (message) {
             && isRightId
             && (message.withoutMongo
                 || needToFetch
-                || (rightIds && _.contains(rightIds, id))
-                || (_this.matcher ? _this.matcher.documentMatches(newDoc).result : _this.collection.find(_.extend({}, _this.selector, {_id: id}), _this.quickFindOptions).count()));
+                || (fetchedRightIds && _.contains(fetchedRightIds, id))
+                || (_this.matcher ? (!!message.doc || _this.matcher.documentMatches(newDoc).result) : _this.collection.find(_.extend({}, _this.selector, {_id: id}), _this.quickFindOptions).count()));
 
         if (message.method !== 'remove' && dokIsOk) {
-            if (_this.options.docsMixin && message.modifier) {
-                let fieldsFromModifier;
-
-                if (!RPS._containsOperators(message.modifier)) {
-                    fieldsFromModifier = _.keys(message.modifier);
-                } else if (RPS._containsOnlySetters(message.modifier)) {
-                    fieldsFromModifier = _.union(_.keys(message.modifier.$set || {}), _.keys(message.modifier.$unset || {}));
-                }
-                _.extend(newDoc, _.omit(_this.options.docsMixin, fieldsFromModifier));
+            if (_this.options.docsMixin) {
+                _.extend(newDoc, _this.options.docsMixin);
             }
 
             // added or changed
@@ -314,29 +346,30 @@ RPS._observer.prototype.handleMessage = function (message) {
 
             if (!_.isEmpty(finalFields)) {
                 _this.callListeners(action, id, finalFields);
-                _this.docs[id] = newDoc;
             }
+
+            _this.docs[id] = newDoc;
         } else if (knownId) {
             // removed
             _this.callListeners('removed', id);
-            delete _this.docs[id];
+            _this.docs[id] = null;
         }
 
-        if (rightIds) {
+        if (fetchedRightIds) {
             _.each(_this.docs, function (doc, id) {
                 // remove irrelevant docs
-                if (doc && !_.contains(rightIds, id)) {
+                if (doc && !_.contains(fetchedRightIds, id)) {
                     _this.callListeners('removed', id);
-                    delete _this.docs[id];
+                    _this.docs[id] = null;
                 }
             });
 
             // add new from DB
-            _.each(rightIds, function (id) {
+            _.each(fetchedRightIds, function (id) {
                 if (!_this.docs[id]) {
                     var doc = _this.collection.findOne({_id: id}, _this.findOptions);
                     _this.callListeners('added', id, _this.projectionFn(doc));
-                    _this.docs[id] = _.extend(doc, _this.options.docsMixin);
+                    _this.docs[id] = _this.options.docsMixin ? _.extend(doc, _this.options.docsMixin) : doc;
                 }
             });
         }

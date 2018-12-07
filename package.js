@@ -12,13 +12,13 @@ Npm.depends({
 });
 
 Package.onUse(function (api) {
-    api.versionsFrom('1.8');
+    api.versionsFrom('1.6.1.4');
 
     api.use(['random', 'underscore', 'ejson']);
     api.use(['ddp-server', 'minimongo', 'diff-sequence'], 'server');
 
     api.addFiles('namespace.js');
-    api.addFiles(['utils-server.js', 'redis.js'], 'server');
+    api.addFiles('redis.js', 'server');
     api.addFiles(['write.js']);
     api.addFiles('write-client.js', 'client');
     api.addFiles(['write-server.js', 'messenger.js', 'observe-changes.js', 'publish.js'], 'server');
