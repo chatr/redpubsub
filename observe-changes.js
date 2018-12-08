@@ -41,6 +41,8 @@ RPS._observer = function (collection, options, key) {
     this.collection = collection;
     this.options = options;
     this.noCache = options.noCache;
+    this.noDiff = options.noDiff;
+    this.noModifierCheck = options.noModifierCheck;
     this.selector = options.selector;
     this.findOptions = options.options || {};
     this.findOptions.fields = this.findOptions.fields || {};
@@ -232,7 +234,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 if (!_this.actions.changed) {
                     // but no actions for `changed` are declared (so don’t care)
                     return;
-                } else if (_this.projectionIncluding && message.modifier) {
+                } else if (!_this.noModifierCheck && _this.projectionIncluding && message.modifier) {
                     // compute modified fields
                     const modifiedFields = {};
 
@@ -352,7 +354,7 @@ RPS._observer.prototype.handleMessage = function (message) {
 
             if (knownId) {
                 action = 'changed';
-                fields = _this.noCache ? newDoc : DiffSequence.makeChangedFields(newDoc, oldDoc);
+                fields = (_this.noCache || _this.noDiff) ? newDoc : DiffSequence.makeChangedFields(newDoc, oldDoc);
             } else {
                 action = 'added';
                 fields = newDoc;
