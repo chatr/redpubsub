@@ -193,7 +193,6 @@ RPS._observer.prototype.onMessage = function (message) {
     if (!this.initiallyFetched && !this.noCache) return;
 
     if (message.withoutMongo && this.options.withMongoOnly) {
-        console.log('RPS ignore without mongo');
         return;
     }
 
