@@ -49,7 +49,7 @@ RPS._observer = function (collection, options, key) {
     this.needToFetchAlways = this.findOptions.limit && !options.lazyLimit;
     this.quickFindOptions = _.extend({}, this.findOptions, {fields: {_id: 1}});
 
-    this.projectionFields = EJSON.clone(this.findOptions.fields);
+    this.projectionFields = _.clone(this.findOptions.fields);
     this.projectionIncluding = null; // Unknown
 
     if (this.projectionFields) {
