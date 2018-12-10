@@ -40,9 +40,6 @@ RPS._observer = function (collection, options, key) {
 
     this.collection = collection;
     this.options = options;
-    this.noCache = options.noCache;
-    this.noDiff = options.noDiff;
-    this.noModifierCheck = options.noModifierCheck;
     this.selector = options.selector;
     this.findOptions = options.options || {};
     this.findOptions.fields = this.findOptions.fields || {};
@@ -175,7 +172,7 @@ RPS._observer.prototype.initialFetch = function () {
         });
     }
 
-    this.initiallyFetched = !this.noCache;
+    this.initiallyFetched = true;
 };
 
 RPS._observer.prototype.initialAdd = function (listenerId) {
@@ -185,14 +182,11 @@ RPS._observer.prototype.initialAdd = function (listenerId) {
     _.each(this.docs, function (doc, id) {
         if (!doc) return;
         callbacks.added && callbacks.added(id, _this.projectionFn(doc));
-        if (_this.noCache) {
-            _this.docs[id] = true; // free memory
-        }
     });
 };
 
 RPS._observer.prototype.onMessage = function (message) {
-    if (!this.initiallyFetched && !this.noCache) return;
+    if (!this.initiallyFetched) return;
 
     if (message.withoutMongo && this.options.withMongoOnly) {
         return;
@@ -207,6 +201,22 @@ RPS._observer.prototype.onMessage = function (message) {
 
 RPS._observer.prototype.handleMessage = function (message) {
     const _this = this;
+
+    function computeModifiedFields () {
+        if (!message.modifier || message._modifiedFields) return;
+
+        message._modifiedFields = {};
+
+        _.each(message.modifier, function (params, op) {
+            if (op.charAt(0) === '$') {
+                _.each(params, function (value, path) {
+                    // treat dotted fields as if they are replacing their top-level part
+                    // record the field we are trying to change
+                    message._modifiedFields[topLevelPath(path)] = true;
+                });
+            }
+        });
+    }
 
     // early decisions
     if (_this.matcher && message.doc) {
@@ -234,21 +244,10 @@ RPS._observer.prototype.handleMessage = function (message) {
                 if (!_this.actions.changed) {
                     // but no actions for `changed` are declared (so don’t care)
                     return;
-                } else if (!_this.noModifierCheck && _this.projectionIncluding && message.modifier) {
-                    // compute modified fields
-                    const modifiedFields = {};
+                } else if (_this.projectionIncluding && message.modifier) {
+                    computeModifiedFields();
 
-                    _.each(message.modifier, function (params, op) {
-                        if (op.charAt(0) === '$') {
-                            _.each(params, function (value, path) {
-                                // treat dotted fields as if they are replacing their top-level part
-                                // record the field we are trying to change
-                                modifiedFields[topLevelPath(path)] = true;
-                            });
-                        }
-                    });
-
-                    const relevantModifier = _.some(modifiedFields, function (value, field) {
+                    const relevantModifier = _.some(message._modifiedFields, function (value, field) {
                         return _this.projectionTopFields[field];
                     });
 
@@ -305,14 +304,6 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         let newDoc = message.doc;
 
-        if (_this.noCache && newDoc && message.modifier && message.modifier.$unset) {
-            _.each(message.modifier.$unset, function (value, path) {
-                if (value && path.indexOf('.') === -1) {
-                    newDoc[path] = undefined;
-                }
-            });
-        }
-
         if (!newDoc) {
             if (message.method === 'insert' && !badTS) {
                 newDoc = _.extend({}, message.selector, {_id: id});
@@ -345,7 +336,8 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         if (message.method !== 'remove' && dokIsOk) {
             if (_this.options.docsMixin) {
-                _.extend(newDoc, _this.options.docsMixin);
+                computeModifiedFields();
+                _.extend(newDoc, _.omit(_this.options.docsMixin, _.keys(message._modifiedFields || {})));
             }
 
             // added or changed
@@ -354,7 +346,7 @@ RPS._observer.prototype.handleMessage = function (message) {
 
             if (knownId) {
                 action = 'changed';
-                fields = (_this.noCache || _this.noDiff) ? newDoc : DiffSequence.makeChangedFields(newDoc, oldDoc);
+                fields = DiffSequence.makeChangedFields(newDoc, oldDoc);
             } else {
                 action = 'added';
                 fields = newDoc;
@@ -366,7 +358,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 _this.callListeners(action, id, finalFields);
             }
 
-            _this.docs[id] = (!_this.noCache || message.withoutMongo) ? newDoc : true;
+            _this.docs[id] = newDoc;
         } else if (knownId) {
             // removed
             _this.callListeners('removed', id);
@@ -390,7 +382,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                         _.extend(doc, _this.options.docsMixin);
                     }
                     _this.callListeners('added', id, _this.projectionFn(doc));
-                    _this.docs[id] = !!_this.noCache || doc;
+                    _this.docs[id] = doc;
                 }
             });
         }
