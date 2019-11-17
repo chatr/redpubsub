@@ -148,3 +148,10 @@ var handler = RPS.observeChanges(Hits, {selector: {siteId: siteId}, options: {fi
 // stop it when you need:
 // handler.stop();
 ```
+
+----
+
+To test in your local app while developing the package:
+```
+ln -s ~/Projects/Chatra/redpubsub packages/redpubsub
+```
