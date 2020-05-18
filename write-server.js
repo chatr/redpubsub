@@ -1,6 +1,6 @@
 RPS.write = function (collection, method, options) {
     options = options || {};
-    options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : options.doc || {};
+    options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : EJSON.clone(options.doc) || {};
 
     const _id = options.selector._id;
     const _idIsId = LocalCollection._selectorIsId(_id);
