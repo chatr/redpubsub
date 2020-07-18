@@ -284,9 +284,9 @@ RPS._observer.prototype.handleMessage = function (message) {
 
     _.each(ids, function (id) {
         // fight against race condition
-        var lastTs = _this.lastTs[id],
-            badTS = lastTs >= message.ts,
-            lastMethod = _this.lastMethod[id];
+        const lastTs = _this.lastTs[id];
+        const badTS = lastTs >= message.ts;
+        const lastMethod = _this.lastMethod[id];
 
         _this.lastTs[id] = badTS ? lastTs : message.ts;
 
@@ -298,7 +298,8 @@ RPS._observer.prototype.handleMessage = function (message) {
 
         _this.lastMethod[id] = message.method;
 
-        const oldDoc = _this.docs[id];
+        let oldDoc = _this.docs[id];
+
         const knownId = !!oldDoc;
         const isRightId = !fetchedRightIds || _.contains(fetchedRightIds, id);
 
@@ -309,7 +310,12 @@ RPS._observer.prototype.handleMessage = function (message) {
                 newDoc = _.extend({}, message.selector, {_id: id});
             } else if (message.withoutMongo && message.method !== 'remove') {
                 try {
-                    newDoc = _.extend({_id: id}, oldDoc);
+                    if (oldDoc && message.method === 'upsert') {
+                        const matcher = new Minimongo.Matcher(message.selector);
+                        if (!matcher.documentMatches(oldDoc).result) return;
+                    }
+
+                    newDoc = _.extend({_id: id}, message.selector, oldDoc);
                     LocalCollection._modify(newDoc, message.modifier);
                 } catch (e) {}
             }

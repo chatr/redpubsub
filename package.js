@@ -12,7 +12,7 @@ Npm.depends({
 });
 
 Package.onUse(function (api) {
-    api.versionsFrom('1.8.0.1');
+    api.versionsFrom('1.6.1.4');
 
     api.use(['random', 'underscore', 'ejson']);
     api.use(['minimongo', 'diff-sequence'], 'server');
