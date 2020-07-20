@@ -310,7 +310,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                 newDoc = _.extend({}, message.selector, {_id: id});
             } else if (message.withoutMongo && message.method !== 'remove') {
                 try {
-                    if (oldDoc && message.method === 'upsert') {
+                    if (oldDoc) {
                         const matcher = new Minimongo.Matcher(message.selector);
                         if (!matcher.documentMatches(oldDoc).result) return;
                     }
