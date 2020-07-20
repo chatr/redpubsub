@@ -315,7 +315,7 @@ RPS._observer.prototype.handleMessage = function (message) {
                         if (!matcher.documentMatches(oldDoc).result) return;
                     }
 
-                    newDoc = _.extend({_id: id}, message.selector, oldDoc);
+                    newDoc = _.extend({_id: id}, oldDoc);
                     LocalCollection._modify(newDoc, message.modifier);
                 } catch (e) {}
             }
