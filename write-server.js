@@ -53,18 +53,16 @@ RPS.write = function (collection, method, options) {
              });
         } else {
             if (idMap.length) {
-                docs = collection.find({_id: {$in: idMap}});
+                idMap.forEach(function (id) {
+                    publish(null, id);
+                });
             } else if (method === 'upsert' && res.insertedId) {
-                docs = collection.find({_id: res.insertedId});
+                publish(collection.findOne({_id: res.insertedId}));
             } else if (method === 'insert') {
                 const doc = options.selector;
-                docs = [doc];
-                idMap = [doc._id = doc._id || res]
-            }
-
-            docs && docs.forEach(function (doc) {
+                doc._id = doc._id || res;
                 publish(doc);
-            });
+            }
         }
 
         return res;
