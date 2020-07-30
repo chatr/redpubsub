@@ -70,7 +70,7 @@ RPS.write = function (collection, method, options) {
 
     if (options.noWrite) {
         publish(options.doc);
-    } else {
+    } else if (!options.noPublish) {
         if (channels && method !== 'insert' && !options.withoutMongo) {
             const findOptions = {};
 
