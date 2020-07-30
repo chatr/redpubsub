@@ -42,7 +42,7 @@ RPS.write = function (collection, method, options) {
     }
 
     function afterWrite (res) {
-        if (!channels) return res;
+        if (!channels || options.noPublish) return res;
 
         if (options.withoutMongo) {
             const id = _idIsId ? _id : (method === 'insert' || method === 'upsert') && Random.id();
@@ -70,8 +70,8 @@ RPS.write = function (collection, method, options) {
 
     if (options.noWrite) {
         publish(options.doc);
-    } else if (!options.noPublish) {
-        if (channels && method !== 'insert' && !options.withoutMongo) {
+    } else {
+        if (channels && !options.noPublish && method !== 'insert' && !options.withoutMongo) {
             const findOptions = {};
 
             if (method !== 'remove') {
@@ -92,7 +92,6 @@ RPS.write = function (collection, method, options) {
                     docs.push(doc);
                 });
             }
-
         }
 
         const callback = _.last(_.toArray(arguments));
