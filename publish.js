@@ -5,7 +5,7 @@ RPS.publish = function (sub, requests) {
     _.each(requests, function (request, i) {
         const collectionName = request.collectionName || request.collection._name;
 
-        const handler = RPS.observeChanges(request.collection, request.options, {
+        const handler = RPS.observeChanges(request.collection, EJSON.clone(request.options), {
             added: function (id, fields) {
                 sub && sub.added(collectionName, id, fields);
             },
@@ -26,10 +26,7 @@ RPS.publish = function (sub, requests) {
         while (handlers.length) {
             handlers.shift().stop();
         }
-        sub = null;
     });
 
-    var docs = _.pluck(handlers, 'docs');
-
-    return docs.length > 1 ? docs : docs[0];
+    return handlers.length > 1 ? handlers : handlers[0];
 };

@@ -5,11 +5,7 @@ RPS.observeChanges = function (collection, options, callbacks) {
 
     const listenerId = Random.id();
     const collectionName = collection._name;
-    const cursorDescription = {
-            collectionName: collectionName,
-            options: _.extend(options, {selector: Mongo.Collection._rewriteSelector(options.selector || {})})
-        };
-    const observerKey = JSON.stringify(cursorDescription);
+    const observerKey = JSON.stringify(collectionName) + JSON.stringify(options);
 
     let observer = RPS._observers[observerKey] || (RPS._observers[observerKey] = new RPS._observer(collection, options, observerKey));
 
@@ -20,10 +16,9 @@ RPS.observeChanges = function (collection, options, callbacks) {
     // todo: check for memory leak
     return {
         stop: function () {
-            observer && observer.removeListener(listenerId);
-            observer = null;
+            observer.removeListener(listenerId);
         },
-        docs: observer.docs
+        observer
     }
 };
 
@@ -410,6 +405,7 @@ RPS._observer.prototype.resume = function () {
 RPS._observer.prototype.kill = function () {
     if (!this.initialized) return;
     this.initialized = false;
+    this.docs = null;
 
     if (!this.options.nonreactive) {
         RPS._messenger.removeObserver(this.key);

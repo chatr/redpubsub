@@ -7,6 +7,8 @@ RPS.write = function (collection, method, options) {
     const collectionName = collection._name;
     const config = RPS.config[collectionName] || {};
     const channels = !options.noPublish && (options.channels || config.channels || collectionName);
+    const channelsIsFuntion = _.isFunction(channels);
+    const fields = options.fields || {};
 
     let idMap = [];
     let docs = [];
@@ -14,7 +16,7 @@ RPS.write = function (collection, method, options) {
     function publish (doc, id) {
         let channelsForDoc;
         if (_.isFunction(channels)) {
-            channelsForDoc = channels(doc, options.selector, options.fields);
+            channelsForDoc = channels(doc, options.selector, fields);
         } else {
             channelsForDoc = channels;
         }
@@ -47,10 +49,6 @@ RPS.write = function (collection, method, options) {
         if (options.withoutMongo) {
             const id = _idIsId ? _id : (method === 'insert' || method === 'upsert') && Random.id();
             publish(null, id);
-        } else if (method === 'remove') {
-             docs.forEach(function (doc) {
-                publish(doc);
-             });
         } else {
             if (idMap.length) {
                 idMap.forEach(function (id) {
@@ -72,24 +70,35 @@ RPS.write = function (collection, method, options) {
         publish(options.doc);
     } else {
         if (channels && !options.noPublish && method !== 'insert' && !options.withoutMongo) {
-            const findOptions = {};
-
-            if (method !== 'remove') {
-                if (_idIsId) {
-                    idMap.push(_id);
-                } else {
-                    findOptions.fields = {_id: 1};
-
-                    if (!options.options || !options.options.multi) {
-                        findOptions.limit = 1;
-                    }
-                }
+            if (_idIsId) {
+                idMap.push(_id);
             }
 
-            if (!idMap.length) {
-                collection.find(options.selector, findOptions).forEach(function (doc) {
+            const missedFields = channelsIsFuntion &&
+                config.fetchFields &&
+                _.difference(
+                    config.fetchFields,
+                    _.union(_.keys(options.selector), _.keys(fields))
+                );
+
+            if (missedFields && missedFields.length) {
+                console.log('MISSED_FIELDS! collection._name, method, options, missedFields:', collection._name, method, options, missedFields);
+            }
+
+            if ((missedFields && missedFields.length) || !idMap.length) {
+                const findOptions = {fields: {_id: 1}};
+
+                missedFields && missedFields.forEach((field) => {
+                    findOptions.fields[field] = 1;
+                });
+
+                if (!options.options || !options.options.multi) {
+                    findOptions.limit = 1;
+                }
+
+                collection.find(options.selector, findOptions).forEach(function (doc, i) {
                     idMap.push(doc._id);
-                    docs.push(doc);
+                    !i && _.extend(fields, doc);
                 });
             }
         }
