@@ -3,7 +3,7 @@ RPS.write = function (collection, method, options) {
     options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : EJSON.clone(options.doc) || {};
 
     const _id = options.selector._id;
-    const _idIsId = LocalCollection._selectorIsId(_id);
+    const _idIsId = !!_id;
     const collectionName = collection._name;
     const config = RPS.config[collectionName] || {};
     const channels = !options.noPublish && (options.channels || config.channels || collectionName);
