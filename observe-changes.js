@@ -9,7 +9,7 @@ RPS.observeChanges = function (collection, options, callbacks) {
             collectionName: collectionName,
             options: _.extend(options, {selector: Mongo.Collection._rewriteSelector(options.selector || {})})
         };
-    const observerKey = JSON.stringify(cursorDescription);
+    const observerKey = options.observerKey || JSON.stringify(cursorDescription);
 
     let observer = RPS._observers[observerKey] || (RPS._observers[observerKey] = new RPS._observer(collection, options, observerKey));
 
