@@ -5,7 +5,7 @@ RPS.observeChanges = function (collection, options, callbacks) {
 
     const listenerId = Random.id();
     const collectionName = collection._name;
-    const observerKey = JSON.stringify(collectionName) + JSON.stringify(options);
+    const observerKey = options.observerKey || (JSON.stringify(collectionName) + JSON.stringify(options));
 
     let observer = RPS._observers[observerKey] || (RPS._observers[observerKey] = new RPS._observer(collection, options, observerKey));
 
