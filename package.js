@@ -1,6 +1,6 @@
 Package.describe({
     name: 'chatra:redpubsub',
-    version: '0.14.2',
+    version: '0.14.3',
     summary: 'Custom pub/sub interface for Meteor on top of Redis',
     git: 'https://github.com/chatr/redpubsub.git',
     documentation: 'README.md'
@@ -15,7 +15,7 @@ Package.onUse(function (api) {
     api.versionsFrom('1.12.1');
 
     api.use(['random', 'underscore', 'ejson']);
-    api.use(['minimongo', 'diff-sequence'], 'server');
+    api.use(['ddp-server', 'minimongo', 'diff-sequence'], 'server');
 
     api.addFiles('namespace.js');
     api.addFiles('redis.js', 'server');
