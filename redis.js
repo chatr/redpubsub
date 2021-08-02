@@ -3,11 +3,14 @@ RPS._serverId = Random.id();
 const Redis = Npm.require('redis');
 const url = Npm.require('url');
 
-function createRedisClient (conf, key, revive) {
+RPS._status = {};
+
+function createRedisClient (conf, key) {
     conf = conf || {};
 
     const logLabel = 'RPS: [' + key + '] ';
-    let needToResubscribe = revive;
+
+    RPS._status[key] = {errors: [], messages: 0};
 
     console.info(logLabel + 'connecting to Redis...', redisConfToString(conf));
 
@@ -17,40 +20,37 @@ function createRedisClient (conf, key, revive) {
         {
             retry_strategy: function (options) {
                 return Math.min(options.attempt * 100, 3000);
-            }
+            },
+            password: conf.auth
         });
 
-    if (conf.auth) {
-        client.auth(conf.auth, afterAuthenticated);
-    }
-
-    function afterAuthenticated (err) {
-        if (err) {
-            throw err;
-        }
-    }
-
     client.on('error', function (err) {
-        console.error(logLabel + err.toString())
+        console.error(logLabel + err.toString());
+
+        RPS._status[key].errors.push(err.toString());
     });
 
     client.on('connect', function () {
         console.info(logLabel + 'connected to Redis!');
-        if (needToResubscribe) {
-            resubscribe();
-            needToResubscribe = false;
-        }
+
+        RPS._status[key].connected = true;
     });
 
     client.on('reconnecting', function () {
         console.info(logLabel + 'reconnecting to Redis...');
+
+        RPS._status[key].connected = false;
     });
 
     client.on('end', function () {
         console.error(logLabel + 'end of the Redis? No...');
+
+        RPS._status[key].connected = true;
     });
 
     client.on('message', function (channel, messageString) {
+
+
         let message;
         try {
             message = JSON.parse(messageString);
