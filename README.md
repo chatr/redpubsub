@@ -153,5 +153,5 @@ var handler = RPS.observeChanges(Hits, {selector: {siteId: siteId}, options: {fi
 
 To test in your local app while developing the package:
 ```
-ln -s ~/Projects/Chatra/redpubsub packages/redpubsub
+ln -s ~/Projects/WebstormsProjects/redpubsub packages/redpubsub
 ```

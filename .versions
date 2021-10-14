@@ -1,10 +1,10 @@
-babel-compiler@7.6.2
+babel-compiler@7.7.0
 babel-runtime@1.5.0
 base64@1.0.12
-chatra:redpubsub@0.14.4
+chatra:redpubsub@0.14.6
 diff-sequence@1.1.1
 dynamic-import@0.7.1
-ecmascript@0.15.2
+ecmascript@0.15.3
 ecmascript-runtime@0.7.0
 ecmascript-runtime-client@0.11.1
 ecmascript-runtime-server@0.10.1
