@@ -3,7 +3,7 @@ RPS.write = function (collection, method, options) {
     options.selector = options.selector ? Mongo.Collection._rewriteSelector(options.selector) : options.doc || {};
 
     const _id = options.selector._id;
-    const _idIsId = !!_id;
+    const _idIsId = !!_id && typeof _id === 'string';
     const collectionName = collection._name;
     const config = RPS.config[collectionName] || {};
     const channels = !options.noPublish && (options.channels || config.channels || collectionName);
@@ -59,7 +59,7 @@ RPS.write = function (collection, method, options) {
             } else if (method === 'insert') {
                 const doc = options.selector;
                 docs = [doc];
-                idMap = [doc._id = doc._id || res]
+                idMap = [doc._id = doc._id || res];
             }
 
             docs && docs.forEach(function (doc) {
