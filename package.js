@@ -1,6 +1,6 @@
 Package.describe({
     name: 'chatra:redpubsub',
-    version: '0.14.9',
+    version: '0.14.10',
     summary: 'Custom pub/sub interface for Meteor on top of Redis',
     git: 'https://github.com/chatr/redpubsub.git',
     documentation: 'README.md'
@@ -12,7 +12,7 @@ Npm.depends({
 });
 
 Package.onUse(function (api) {
-    api.versionsFrom('1.12.1');
+    api.versionsFrom('2.5');
 
     api.use(['random', 'underscore', 'ejson']);
     api.use(['minimongo', 'diff-sequence'], 'server');
