@@ -141,6 +141,7 @@ RPS._observer.prototype.removeListener = function (listenerId) {
 
 RPS._observer.prototype.refreshActionsList = function (listenerId) {
     const _this = this;
+
     if (listenerId) {
         _.each(this.listeners[listenerId], function (fn, action) {
             _this.actions[action] = 1;
@@ -159,9 +160,9 @@ RPS._observer.prototype.refreshActionsList = function (listenerId) {
 RPS._observer.prototype.initialFetch = function () {
     if (this.initiallyFetched) return;
 
-    if (!this.options.withoutMongo) {
-        const _this = this;
+    const _this = this;
 
+    if (!this.options.withoutMongo) {
         this.collection.find(this.selector, this.findOptions).forEach(function (doc) {
             _this.docs[doc._id] = _this.options.docsMixin ? _.extend(doc, _this.options.docsMixin) : doc;
         });
@@ -195,6 +196,8 @@ RPS._observer.prototype.onMessage = function (message) {
 };
 
 RPS._observer.prototype.handleMessage = function (message) {
+    if (!this.initialized) return;
+
     const _this = this;
 
     function computeModifiedFields () {
