@@ -281,6 +281,7 @@ RPS._observer.prototype.handleMessage = function (message) {
     if (!ids || !ids.length) return;
 
     _.each(ids, function (id) {
+
         // fight against race condition
         const lastTs = _this.lastTs[id];
         const badTS = lastTs >= message.ts;
@@ -408,10 +409,10 @@ RPS._observer.prototype.resume = function () {
 RPS._observer.prototype.kill = function () {
     if (!this.initialized) return;
     this.initialized = false;
-    this.docs = null;
 
     if (!this.options.nonreactive) {
         RPS._messenger.removeObserver(this.key);
     }
+
     delete RPS._observers[this.key];
 };
