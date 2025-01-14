@@ -1,41 +1,42 @@
-const Fiber = Npm.require('fibers');
+import { subscribe, unsubscribe } from './redis';
 
-RPS._messenger = {
-    channels: {},
-    observers: {},
-    addObserver: function (observerKey, channel) {
-        if (!RPS._messenger.channels[channel]) {
-            RPS._messenger.channels[channel] = {};
-        }
-
-        RPS._messenger.channels[channel][observerKey] = true;
-        RPS._messenger.observers[observerKey] = channel;
-
-        RPS._sub(channel);
-    },
-    removeObserver: function (observerKey) {
-        const channel = RPS._messenger.observers[observerKey];
-        if (channel) {
-            delete RPS._messenger.channels[channel][observerKey];
-            if (_.isEmpty(RPS._messenger.channels[channel])) {
-                RPS._unsub(channel);
-                delete RPS._messenger.channels[channel];
-            }
-        }
-        delete RPS._messenger.observers[observerKey];
-    },
-    onMessage: function (channel, message, runWithFiber) {
-        _.each(RPS._messenger.channels[channel], function (flag, observerKey) {
-            const observer = RPS._observers[observerKey];
-            if (observer) {
-                if (runWithFiber) {
-                    Fiber(function () {
-                        observer.onMessage(message);
-                    }).run();
-                } else {
-                    observer.onMessage(message);
-                }
-            }
-        });
+class Messenger {
+    constructor() {
+        this.channels = {};
+        this.observers = {};
+        this.onMessage = null;
     }
-};
+
+    addObserver(observerKey, channel) {
+        if (!this.channels[channel]) {
+            this.channels[channel] = {};
+        }
+
+        this.channels[channel][observerKey] = true;
+        this.observers[observerKey] = channel;
+
+        subscribe(channel);
+    }
+
+    removeObserver(observerKey) {
+        const channel = this.observers[observerKey];
+        if (channel) {
+            delete this.channels[channel][observerKey];
+            if (Object.keys(this.channels[channel]).length === 0) {
+                unsubscribe(channel);
+                delete this.channels[channel];
+            }
+        }
+        delete this.observers[observerKey];
+    }
+
+    handleMessage(channel, message) {
+        if (this.onMessage) {
+            this.onMessage(channel, message);
+        }
+    }
+}
+
+const messenger = new Messenger();
+
+export { Messenger, messenger };
