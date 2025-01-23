@@ -67,6 +67,10 @@ async function createRedisClient(key) {
  * @param {string} channel The channel to subscribe to.
  */
 function subscribe(channel) {
+    if (!clients.sub) {
+        return;
+    }
+
     console.info(`Subscribing to channel: ${channel}`);
 
     clients.sub
@@ -99,6 +103,10 @@ function subscribe(channel) {
  * @param {string} channel The channel to unsubscribe from.
  */
 function unsubscribe(channel) {
+    if (!clients.sub) {
+        return;
+    }
+
     console.info(`Unsubscribing from channel: ${channel}`);
 
     clients.sub
@@ -114,6 +122,10 @@ function unsubscribe(channel) {
  * @param {string} message The message to publish.
  */
 function publishMessage(channel, message) {
+    if (!clients.pub) {
+        return;
+    }
+
     status.pub.messages += 1;
 
     clients.pub
