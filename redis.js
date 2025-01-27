@@ -3,7 +3,6 @@ import { createClient } from 'redis';
 import { messenger } from './messenger';
 
 const serverId = Random.id();
-const status = {};
 const clients = {};
 
 /**
@@ -24,34 +23,32 @@ const redisConfig = parseRedisEnvUrl();
  * @param {string} key The client key ('pub' or 'sub').
  */
 async function createRedisClient(key) {
-    const logLabel = `RPS: [${key}] `;
-    status[key] = { errors: [], messages: 0, reconnects: 0 };
+    const logLabel = `RPS: [${key}]`;
 
-    console.info(`${logLabel}connecting to Redis...`, redisConfig);
+    console.info(`${logLabel} connecting to Redis...`, redisConfig);
 
     const client = createClient(redisConfig);
 
     clients[key] = client;
 
     client.on('error', (err) => {
-        console.error(`${logLabel}${err.toString()}`);
-        status[key].errors.push(err.toString());
+        if (err.errors) {
+            console.error(`${logLabel} Errors:\n${err.errors.join('\n')}`);
+        } else {
+            console.error(`${logLabel} ${err}`);
+        }
     });
 
     client.on('connect', () => {
-        console.info(`${logLabel}connected to Redis!`);
-        status[key].connected = true;
+        console.info(`${logLabel} connected to Redis!`);
     });
 
     client.on('reconnecting', () => {
-        console.info(`${logLabel}reconnecting to Redis...`);
-        status[key].connected = false;
-        status[key].reconnects += 1;
+        console.info(`${logLabel} reconnecting to Redis...`);
     });
 
     client.on('end', () => {
-        console.error(`${logLabel}Redis connection ended.`);
-        status[key].connected = false;
+        console.error(`${logLabel} Redis connection ended.`);
     });
 
     await client.connect();
@@ -71,12 +68,8 @@ function subscribe(channel) {
         return;
     }
 
-    console.info(`Subscribing to channel: ${channel}`);
-
     clients.sub
         .subscribe(channel, (messageString, channelName) => {
-            status.sub.messages += 1;
-
             let message;
             try {
                 message = JSON.parse(messageString);
@@ -85,7 +78,6 @@ function subscribe(channel) {
                     `Failed to parse JSON. Channel: ${channelName}, Message: ${messageString}`,
                     err,
                 );
-                status.sub.errors.push(err.toString());
                 return;
             }
 
@@ -107,8 +99,6 @@ function unsubscribe(channel) {
         return;
     }
 
-    console.info(`Unsubscribing from channel: ${channel}`);
-
     clients.sub
         .unsubscribe(channel)
         .catch((err) => {
@@ -125,8 +115,6 @@ function publishMessage(channel, message) {
     if (!clients.pub) {
         return;
     }
-
-    status.pub.messages += 1;
 
     clients.pub
         .publish(channel, message)

@@ -6,6 +6,7 @@ module.exports = {
         'import/no-cycle': 'off',
         'no-restricted-syntax': 'off',
         'no-continue': 'off',
+        'no-console': 'off',
         'import/prefer-default-export': 'off',
         'no-await-in-loop': 'off',
         'no-void': 'off',
