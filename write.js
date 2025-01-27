@@ -5,7 +5,7 @@
  * @param {Object} options The options for the write operation.
  * @return {Promise<any>} A promise that resolves with the result.
  */
-function _write(collection, method, options) {
+async function _write(collection, method, options) {
     switch (method) {
     case 'insert':
         return collection.insertAsync(options.selector);

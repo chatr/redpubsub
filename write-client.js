@@ -7,7 +7,7 @@ import { _write } from './write';
  * @param {Object=} options The options for the write operation.
  * @return {Promise<any>} A promise that resolves with the result.
  */
-function write(collection, method, options = {}) {
+async function write(collection, method, options = {}) {
     options.selector = options.selector || options.doc;
     return _write(collection, method, options);
 }
