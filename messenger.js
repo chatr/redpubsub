@@ -39,4 +39,4 @@ class Messenger {
 
 const messenger = new Messenger();
 
-export { Messenger, messenger };
+export { messenger };
