@@ -17,6 +17,9 @@ Custom pub/sub interface for Meteor on top of Redis, updated for Meteor 3 compat
         - [Publishing Data](#publishing-data)
         - [Configuring Channels](#configuring-channels)
         - [Using `RPS.write`](#using-rpswrite-on-the-server)
+        - [Publishing with `withoutMongo` Option](#publishing-with-withoutmongo-option)
+        - [Publishing Multiple Collections Simultaneously](#publishing-multiple-collections-simultaneously)
+        - [Server-Side observeChanges](#server-side-observechanges)
     - [Client Side](#client-side)
         - [Subscribing to Data](#subscribing-to-data)
         - [Using `RPS.write`](#using-rpswrite-on-the-client)
@@ -33,9 +36,9 @@ The `chatra:redpubsub` package provides a custom publish/subscribe interface for
 
 ## Features
 
-- **Real-Time Data Synchronization**: Use Redis channels to synchronize data changes across multiple Meteor server instances.
-- **Custom Channels**: Configure custom channels for fine-grained control over data publication.
-- **Asynchronous Operations**: Fully supports asynchronous MongoDB operations introduced in Meteor 3.
+- **Real-Time Data Synchronization:** Uses Redis channels to synchronize data changes across multiple Meteor server instances.
+- **Custom Channels:** Configure custom channels for fine-grained control over data publication.
+- **Asynchronous Operations:** Fully supports asynchronous MongoDB operations introduced in Meteor 3.
 - **No Fibers Dependency**
 
 ---
@@ -56,7 +59,7 @@ export RPS_REDIS_URL=redis://localhost:6379
 
 ## Compatibility
 
-- **Meteor version 3 and above**: Fully compatible, using the new asynchronous Meteor collections’ methods.
+- **Meteor version 3 and above:** Fully compatible, using the new asynchronous Meteor collections’ methods.
 
 ---
 
@@ -86,7 +89,7 @@ import { RPS } from 'meteor/chatra:redpubsub';
 
 RPS.config['collectionName'] = {
   channels: (doc, selector, fields) => {
-    // Return a channel name or array of channel names
+    // Return a channel name or an array of channel names
     return `custom_channel_${doc.userId}`;
   },
 };
@@ -153,6 +156,85 @@ async function updateDocument(docId, updateFields) {
     console.error('Error updating document:', err);
   }
 }
+```
+
+#### Publishing with `withoutMongo` Option
+
+This option allows you to publish changes without querying the database after the write operation.
+
+```js
+// server/main.js
+import { Meteor } from 'meteor/meteor';
+import { RPS } from 'meteor/chatra:redpubsub';
+import { MyCollection } from '/imports/api/myCollection';
+
+Meteor.publish('withoutMongoPub', function () {
+  return RPS.publish(this, {
+    collection: MyCollection,
+    options: {
+      selector: { active: true },
+      withoutMongo: true,  // Disable additional Mongo query after write
+    },
+  });
+});
+```
+
+#### Publishing Multiple Collections Simultaneously
+
+You can pass an array of publication requests to `RPS.publish` to publish multiple collections at once:
+
+```js
+// server/main.js
+import { Meteor } from 'meteor/meteor';
+import { RPS } from 'meteor/chatra:redpubsub';
+import { CollectionOne } from '/imports/api/collectionOne';
+import { CollectionTwo } from '/imports/api/collectionTwo';
+
+Meteor.publish('multiCollections', function () {
+  return RPS.publish(this, [
+    {
+      collection: CollectionOne,
+      options: { selector: {} },
+    },
+    {
+      collection: CollectionTwo,
+      options: { selector: {} },
+    },
+  ]);
+});
+```
+
+#### Server-Side observeChanges
+
+You can directly call `RPS.observeChanges` on the server to perform custom actions when data changes occur:
+
+```js
+// server/observe.js
+import { RPS } from 'meteor/chatra:redpubsub';
+import { CollectionName } from '/imports/api/collectionName';
+
+async function observeServerChanges() {
+  const handler = await RPS.observeChanges(
+    CollectionName,
+    { selector: {} },
+    {
+      added: (id, fields) => {
+        console.log('Document added:', id, fields);
+      },
+      changed: (id, fields) => {
+        console.log('Document changed:', id, fields);
+      },
+      removed: (id) => {
+        console.log('Document removed:', id);
+      },
+    }
+  );
+
+  // To stop observing:
+  // handler.stop();
+}
+
+observeServerChanges();
 ```
 
 ### Client Side
