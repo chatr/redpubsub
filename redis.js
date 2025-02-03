@@ -1,122 +1,135 @@
-RPS._serverId = Random.id();
+import { Random } from 'meteor/random';
+import { createClient } from 'redis';
+import { messenger } from './messenger';
 
-const Redis = Npm.require('redis');
-const url = Npm.require('url');
+// Generate a unique server id to prevent echoing messages sent by this server.
+const serverId = Random.id();
+// Object to store Redis clients for publishing and subscribing.
+const clients = {};
 
-RPS._status = {};
-RPS._clients = {};
-
-function parseRedisEnvUrl () {
+/**
+ * Parses the Redis connection URL from the environment variable.
+ * @return {Object} The Redis connection options.
+ */
+function parseRedisEnvUrl() {
     if (process.env.RPS_REDIS_URL) {
-        const parsedUrl = url.parse(process.env.RPS_REDIS_URL);
-        if (parsedUrl.protocol === 'redis:' && parsedUrl.hostname && parsedUrl.port) {
-            const connObj = {
-                host: parsedUrl.hostname,
-                port: parseInt(parsedUrl.port)
-            };
-
-            if (parsedUrl.auth) {
-                connObj.auth = parsedUrl.auth.split(':')[1];
-            }
-
-            return connObj;
-        } else {
-            throw new Error(
-                'RPS_REDIS_URL must contain following url format\n\tredis://redis:<password>@<hostname>:<port>'
-            );
-        }
-    } else {
-        return null;
+        return { url: process.env.RPS_REDIS_URL };
     }
+    return {};
 }
 
+const redisConfig = parseRedisEnvUrl();
 
-const redisConfig = parseRedisEnvUrl() || {};
-let needToResubscribe;
+/**
+ * Creates a Redis client for either publishing or subscribing.
+ * @param {string} key The client key, e.g., 'pub' or 'sub'.
+ */
+async function createRedisClient(key) {
+    const logLabel = `RPS: [${key}]`;
+    console.info(`${logLabel} connecting to Redis...`, redisConfig);
 
-RPS._createRedisClient = function createRedisClient (key, revive) {
-    const logLabel = 'RPS: [' + key + '] ';
+    const client = createClient(redisConfig);
+    clients[key] = client;
 
-    RPS._status[key] = {errors: [], messages: 0, reconnects: 0};
+    // Attach error handler.
+    client.on('error', (err) => {
+        if (err.errors) {
+            console.error(`${logLabel} Errors:\n${err.errors.join('\n')}`);
+        } else {
+            console.error(`${logLabel} ${err}`);
+        }
+    });
 
-    console.info(logLabel + 'connecting to Redis...', redisConfig);
+    // Log when the client connects.
+    client.on('connect', () => {
+        console.info(`${logLabel} connected to Redis!`);
+    });
 
-    const client = RPS._clients[key] = Redis.createClient(
-        redisConfig.port,
-        redisConfig.host,
-        {
-            retry_strategy: function (options) {
-                return Math.min(options.attempt * 100, 3000);
-            },
-            password: redisConfig.auth
+    // Log reconnection attempts.
+    client.on('reconnecting', () => {
+        console.info(`${logLabel} reconnecting to Redis...`);
+    });
+
+    // Log when the connection ends.
+    client.on('end', () => {
+        console.error(`${logLabel} Redis connection ended.`);
+    });
+
+    // Connect asynchronously.
+    await client.connect();
+}
+
+// Immediately create Redis clients for both publishing and subscribing.
+(async () => {
+    await createRedisClient('pub');
+    await createRedisClient('sub');
+})();
+
+/**
+ * Subscribes to a Redis channel.
+ * When a message is received, it is parsed and passed to the messenger.
+ * @param {string} channel The channel to subscribe to.
+ */
+function subscribe(channel) {
+    if (!clients.sub) {
+        return;
+    }
+    clients.sub
+        .subscribe(channel, (messageString, channelName) => {
+            let message;
+            try {
+                message = JSON.parse(messageString);
+            } catch (err) {
+                console.error(
+                    `Failed to parse JSON. Channel: ${channelName}, Message: ${messageString}`,
+                    err,
+                );
+                return;
+            }
+            // Only process the message if it did not originate from this server.
+            if (message && message._serverId !== serverId) {
+                messenger.handleMessage(channelName, message);
+            }
+        })
+        .catch((err) => {
+            console.error('Error subscribing to channel:', channel, err);
         });
-
-    client.on('error', function (err) {
-        console.error(logLabel + err.toString());
-
-        RPS._status[key].errors.push(err.toString());
-    });
-
-    client.on('connect', function () {
-        console.info(logLabel + 'connected to Redis!');
-
-        if (needToResubscribe) {
-            resubscribe();
-            needToResubscribe = false;
-        }
-
-        RPS._status[key].connected = true;
-    });
-
-    client.on('reconnecting', function () {
-        console.info(logLabel + 'reconnecting to Redis...');
-
-        RPS._status[key].connected = false;
-        RPS._status[key].reconnects++;
-    });
-
-    client.on('end', function () {
-        console.error(logLabel + 'end of the Redis? No...');
-
-        RPS._status[key].connected = false;
-    });
-
-    client.on('message', function (channel, messageString) {
-        RPS._status[key].messages++;
-
-        let message;
-        try {
-            message = JSON.parse(messageString);
-        } catch (err) {
-            console.error(logLabel + 'failed `JSON.parse`; channel: ' + channel + ', messageString: ' + messageString, err.toString());
-
-            RPS._status[key].errors.push(err.toString());
-        }
-
-        if (message && message._serverId !== RPS._serverId) {
-            RPS._messenger.onMessage(channel, message, true);
-        }
-    });
 }
 
-RPS._createRedisClient('pub');
-RPS._createRedisClient('sub');
-
-RPS._sub = function (channel) {
-    RPS._clients.sub.subscribe(channel);
-};
-
-RPS._unsub = function (channel) {
-    RPS._clients.sub.unsubscribe(channel);
-};
-
-RPS._pub = function (channel, message) {
-    RPS._status.pub.messages++;
-    RPS._clients.pub.publish(channel, message);
-};
-
-function resubscribe () {
-    _.each(RPS._messenger.channels, function (observerKeys, channel) {
-        RPS._sub(channel);
-    });
+/**
+ * Unsubscribes from a Redis channel.
+ * @param {string} channel The channel to unsubscribe from.
+ */
+function unsubscribe(channel) {
+    if (!clients.sub) {
+        return;
+    }
+    clients.sub
+        .unsubscribe(channel)
+        .catch((err) => {
+            console.error('Error unsubscribing from channel:', channel, err);
+        });
 }
+
+/**
+ * Publishes a message to a Redis channel.
+ * @param {string} channel The channel to publish to.
+ * @param {string} message The message to publish (JSON string).
+ */
+function publishMessage(channel, message) {
+    if (!clients.pub) {
+        return;
+    }
+    clients.pub
+        .publish(channel, message)
+        .catch((err) => {
+            console.error('Error publishing message:', err);
+        });
+}
+
+export {
+    serverId,
+    subscribe,
+    unsubscribe,
+    publishMessage,
+};

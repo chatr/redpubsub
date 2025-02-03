@@ -1,157 +1,356 @@
-# Redpubsub
+# chatra:redpubsub
 
-Custom pub/sub system that works through channels
-(avoiding every oplog change hitting every Meteor instance
-creating an exponential scaling problem). It uses Redis to communicate between Meteor processes.
+[![Version](https://img.shields.io/badge/meteor-%203.x-brightgreen?logo=meteor&logoColor=white)](https://github.com/chatr/safe-update)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-This package implements custom APIs for:
-  1. Writing data into the database and notifying the pub/sub channel(s) about the change.
-  2. Data publication mechanism that subscribes to a pub/sub channel instead of using Meteor's oplog tailing.
+Custom pub/sub interface for Meteor on top of Redis, updated for Meteor 3 compatibility.
 
-Most of the performance improvement comes from the fact that we split changes into separate channels, thus allowing server publications to process changes only from the channels they are interested in instead of every single change as is the case with Meteor by default. Also it fetches DB as little as possible, every observer receives `method`, `selector`, and `modifer` and tries to modify docs right in the memory. It does fetch DB in the case of uncertainty that the operation will be accurate (complicated modifier, race condition, `limit`, `skip` or `sort` options). Needless to say, redpubsub subscriptions reuse observers with the same options and observers reuse Redis channels.
+## Table of Contents
 
-This all works well in [Chatra](https://chatra.io/). Performance improved to a point where we no longer worry about performance (not any time soon at least). Right now ≈300 active sessions give about 5% CPU load on a single machine, before this implementation ≈150 sessions cost us about 75% of CPU.
+- [Introduction](#introduction)
+- [Features](#features)
+- [Installation](#installation)
+- [Compatibility](#compatibility)
+- [Configuration](#configuration)
+- [Usage](#usage)
+    - [Server Side](#server-side)
+        - [Publishing Data](#publishing-data)
+        - [Configuring Channels](#configuring-channels)
+        - [Using `RPS.write`](#using-rpswrite-on-the-server)
+        - [Publishing with `withoutMongo` Option](#publishing-with-withoutmongo-option)
+        - [Publishing Multiple Collections Simultaneously](#publishing-multiple-collections-simultaneously)
+        - [Server-Side observeChanges](#server-side-observechanges)
+    - [Client Side](#client-side)
+        - [Subscribing to Data](#subscribing-to-data)
+        - [Using `RPS.write`](#using-rpswrite-on-the-client)
+- [Examples](#examples)
+- [License](#license)
+
+---
+
+## Introduction
+
+The `chatra:redpubsub` package provides a custom publish/subscribe interface for Meteor applications, leveraging Redis for real-time data synchronization across multiple server instances. This package is especially useful for scaling Meteor applications horizontally, ensuring that all instances remain in sync.
+
+---
+
+## Features
+
+- **Real-Time Data Synchronization:** Uses Redis channels to synchronize data changes across multiple Meteor server instances.
+- **Custom Channels:** Configure custom channels for fine-grained control over data publication.
+- **Asynchronous Operations:** Fully supports asynchronous MongoDB operations introduced in Meteor 3.
+- **No Fibers Dependency**
+
+---
 
 ## Installation
 
-```bash
+```shell
 meteor add chatra:redpubsub
 ```
 
-### Redis
+Ensure that you have Redis installed and running. Set the `RPS_REDIS_URL` environment variable to point to your Redis instance:
 
-This package uses Redis as the communication channel between nodes. It uses pub/sub functionality of Redis.
-You need to have redis-server running locally during development and `RPS_REDIS_URL` environment variable in production.
-
-If you are new to redis, [read this guide](http://redis.io/topics/quickstart).
-
-## API
-### RPS.write(collection, methodName, [options], [callback]) _(server & client simulation)_
-
-Insert a doc synchronously:
-```js
-var newMessageId = RPS.write(Messages, 'insert', {
-    doc: {
-      message: messageString,
-      ts: Date.now(),
-      clientId: clientId
-    }
-});
+```shell
+export RPS_REDIS_URL=redis://localhost:6379
 ```
 
-Update asynchronously (callback is passed):
-```js
-RPS.write(Messages, 'update', {
-    selector: {_id: messageId},
-    modifier: {$set: {message: messageString, updated: true}}
-}, function (error, result) {
-  if (error) console.warn(error);
-});
+---
+
+## Compatibility
+
+- **Meteor version 3 and above:** Fully compatible, using the new asynchronous Meteor collections’ methods.
+
+---
+
+## Configuration
+
+### Setting Up Redis Connection
+
+The package uses the `RPS_REDIS_URL` environment variable to connect to your Redis instance. The URL should be in the format:
+
+```
+redis://:[password]@[hostname]:[port]
 ```
 
-Send ephemeral DB-less typing signal to listeners:
-```js
-RPS.write(Typings, 'upsert', {
-    selector: {_id: clientId},
-    modifier: {$set: {isTyping: true}},
-    withoutMongo: true // do not touch Mongo at all
-});
+Example:
+
+```shell
+export RPS_REDIS_URL=redis://localhost:6379
 ```
 
-Note that if you call `RPS.write` only on the client (outside of the universal methods, for example) channels won’t be notified about the change.
+### Configuring Channels
 
-### RPS.config[collectionName] = options; _(server)_
-Configure what channel(s) to notify via `RPS.config` object:
+You can configure channels on a per-collection basis using `RPS.config`:
+
 ```js
-RPS.config.testCollection = {
-  channels: ['testCollection', 'anotherStaticChannel']
-}
+// server/main.js
+import { RPS } from 'meteor/chatra:redpubsub';
+
+RPS.config['collectionName'] = {
+  channels: (doc, selector, fields) => {
+    // Return a channel name or an array of channel names
+    return `custom_channel_${doc.userId}`;
+  },
+};
 ```
 
-Define channel dinamically:
-```js
-RPS.config.Clients = {
-  channels: function (doc, selector) {
-    return 'clientById:' + doc._id;
-  }
-}
-```
+---
 
-Note that `selector` in above example is taken from `RPS.write` call.
+## Usage
 
-To compute the chanell name use `doc` and `selector` properties:
-```js
-RPS.config.Clients = {
-  channels: function (doc, selector) {
-    return doc && doc.hostId && 'clientsByHostId:' + doc.hostId;
-  }
-}
-```
+### Server Side
 
-### RPS.publish(subscription, [request1, request2...]) _(server)_
+#### Publishing Data
 
-Use it inside `Meteor.publish`:
-```js
-Meteor.publish('messages', function (clientId) {
-    RPS.publish(this, {
-        collection: Messages,
-        options: {
-            selector: {clientId: clientId},
-            options: {fields: {secretAdminNote: 0}},
-
-            // channel to listen to
-            channel: 'messagesByClientId:' + clientId,
-        }
-    });
-});
-```
-
-Publish two or more subscriptions:
-```js
-Meteor.publish('client', function (clientId) {
-    RPS.publish(this, [
-        {
-            collection: Clients,
-            options: {
-                selector: {_id: clientId},
-                channel: 'clientById:' + clientId
-            }
-        },
-        {
-            collection: Typings,
-            options: {
-                selector: {_id: clientId},
-                channel: 'typingByClientId:' + clientId,
-                withoutMongo: true
-            }
-        }
-    ]);
-});
-```
-
-### RPS.observeChanges(collection, options, callbacks) _(server)_
-
-It behaves just like Meteor’s `cursor.observeChange`:
+Use `RPS.publish` to publish data to clients:
 
 ```js
-var count = 0;
-var handler = RPS.observeChanges(Hits, {selector: {siteId: siteId}, options: {fields: {_id: 1}}}, {
-    added: function (id, fields) {
-      count++;
+// server/main.js
+import { Meteor } from 'meteor/meteor';
+import { RPS } from 'meteor/chatra:redpubsub';
+import { CollectionName } from '/imports/api/collectionName';
+
+Meteor.publish('collectionName', function () {
+  return RPS.publish(this, {
+    collection: CollectionName,
+    options: {
+      selector: {}, // MongoDB selector
+      options: {},  // Find options
     },
-    removed: function (id) {
-      count--;
+  });
+});
+```
+
+#### Configuring Channels
+
+You can configure custom channels for a collection:
+
+```js
+// server/main.js
+RPS.config['collectionName'] = {
+  channels: (doc) => `channel_${doc.userId}`,
+};
+```
+
+#### Using `RPS.write` on the Server
+
+Perform write operations and automatically publish changes:
+
+```js
+// server/main.js
+import { RPS } from 'meteor/chatra:redpubsub';
+import { CollectionName } from '/imports/api/collectionName';
+
+async function updateDocument(docId, updateFields) {
+  const options = {
+    selector: { _id: docId },
+    modifier: { $set: updateFields },
+    options: {}, // MongoDB update options
+  };
+
+  try {
+    const result = await RPS.write(CollectionName, 'update', options);
+    console.log('Document updated:', result);
+  } catch (err) {
+    console.error('Error updating document:', err);
+  }
+}
+```
+
+#### Publishing with `withoutMongo` Option
+
+This option allows you to publish changes without querying the database after the write operation.
+
+```js
+// server/main.js
+import { Meteor } from 'meteor/meteor';
+import { RPS } from 'meteor/chatra:redpubsub';
+import { MyCollection } from '/imports/api/myCollection';
+
+Meteor.publish('withoutMongoPub', function () {
+  return RPS.publish(this, {
+    collection: MyCollection,
+    options: {
+      selector: { active: true },
+      withoutMongo: true,  // Disable additional Mongo query after write
+    },
+  });
+});
+```
+
+#### Publishing Multiple Collections Simultaneously
+
+You can pass an array of publication requests to `RPS.publish` to publish multiple collections at once:
+
+```js
+// server/main.js
+import { Meteor } from 'meteor/meteor';
+import { RPS } from 'meteor/chatra:redpubsub';
+import { CollectionOne } from '/imports/api/collectionOne';
+import { CollectionTwo } from '/imports/api/collectionTwo';
+
+Meteor.publish('multiCollections', function () {
+  return RPS.publish(this, [
+    {
+      collection: CollectionOne,
+      options: { selector: {} },
+    },
+    {
+      collection: CollectionTwo,
+      options: { selector: {} },
+    },
+  ]);
+});
+```
+
+#### Server-Side observeChanges
+
+You can directly call `RPS.observeChanges` on the server to perform custom actions when data changes occur:
+
+```js
+// server/observe.js
+import { RPS } from 'meteor/chatra:redpubsub';
+import { CollectionName } from '/imports/api/collectionName';
+
+async function observeServerChanges() {
+  const handler = await RPS.observeChanges(
+    CollectionName,
+    { selector: {} },
+    {
+      added: (id, fields) => {
+        console.log('Document added:', id, fields);
+      },
+      changed: (id, fields) => {
+        console.log('Document changed:', id, fields);
+      },
+      removed: (id) => {
+        console.log('Document removed:', id);
+      },
     }
-    // don't care about changed
+  );
+
+  // To stop observing:
+  // handler.stop();
+}
+
+observeServerChanges();
+```
+
+### Client Side
+
+#### Subscribing to Data
+
+Subscribe to the published data:
+
+```js
+// client/main.js
+import { Meteor } from 'meteor/meteor';
+import { CollectionName } from '/imports/api/collectionName';
+
+Meteor.subscribe('collectionName');
+```
+
+#### Using `RPS.write` on the Client
+
+Perform write operations from the client:
+
+```js
+// client/main.js
+import { RPS } from 'meteor/chatra:redpubsub';
+import { CollectionName } from '/imports/api/collectionName';
+
+async function insertDocument(doc) {
+  try {
+    const result = await RPS.write(CollectionName, 'insert', { doc });
+    console.log('Document inserted:', result);
+  } catch (err) {
+    console.error('Error inserting document:', err);
+  }
+}
+```
+
+---
+
+## Examples
+
+### Full Example
+
+#### Server
+
+```js
+// server/main.js
+import { Meteor } from 'meteor/meteor';
+import { RPS } from 'meteor/chatra:redpubsub';
+import { Messages } from '/imports/api/messages';
+
+RPS.config['messages'] = {
+  channels: (doc) => `user_${doc.userId}_channel`,
+};
+
+Meteor.publish('userMessages', function () {
+  const userId = this.userId;
+  if (!userId) {
+    return this.ready();
+  }
+
+  return RPS.publish(this, {
+    collection: Messages,
+    options: {
+      selector: { userId },
+    },
+  });
 });
 
-// stop it when you need:
-// handler.stop();
+Meteor.methods({
+  async 'messages.insert'(text) {
+    const userId = this.userId;
+    if (!userId) {
+      throw new Meteor.Error('Not authorized');
+    }
+
+    const doc = {
+      text,
+      userId,
+      createdAt: new Date(),
+    };
+
+    return await RPS.write(Messages, 'insert', { doc });
+  },
+});
 ```
 
-----
+#### Client
 
-To test in your local app while developing the package:
+```js
+// client/main.js
+import { Meteor } from 'meteor/meteor';
+import { Messages } from '/imports/api/messages';
+
+Meteor.subscribe('userMessages');
+
+Messages.find().observeChanges({
+  added(id, fields) {
+    console.log('Message added:', id, fields);
+  },
+  changed(id, fields) {
+    console.log('Message changed:', id, fields);
+  },
+  removed(id) {
+    console.log('Message removed:', id);
+  },
+});
+
+async function sendMessage(text) {
+  try {
+    await Meteor.callAsync('messages.insert', text);
+    console.log('Message sent');
+  } catch (err) {
+    console.error('Error sending message:', err);
+  }
+}
 ```
-ln -s ~/Projects/WebstormsProjects/redpubsub packages/redpubsub
-```
+
+## License
+
+This package is licensed under the MIT License.
