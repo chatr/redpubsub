@@ -1,53 +1,86 @@
+import { LRUCache } from 'lru-cache'
 import { Random } from 'meteor/random';
 import { EJSON } from 'meteor/ejson';
 import { Minimongo } from 'meteor/minimongo';
 import { DiffSequence } from 'meteor/diff-sequence';
 import { messenger } from './messenger';
 
+// Global cache for compiled projection functions.
+// Key: JSON string of projection fields, Value: compiled projection function.
+const projectionCache = new LRUCache({
+    max: 50000, // Limit the number of cached projections.
+    ttl: 1000 * 60 * 60 * 8, // Cache for 8 hours.
+});
+
+// Global cache for matchers.
+// Key: JSON string of the selector, Value: Minimongo.Matcher instance.
+const matcherCache = new LRUCache({
+    max: 50000, // Limit the number of cached matchers.
+    ttl: 1000 * 60 * 60 * 8, // Cache for 8 hours.
+});
+
+// Global map for observers indexed by a unique observer key.
 const observers = {};
 
 /**
- * Extracts the top-level path from a dot-notated path.
- * @param {string} path The full path.
- * @return {string} The top-level path.
+ * Utility function to extract the top-level field name from a dot-notated path.
+ * @param {string} path The full dot-notated path.
+ * @return {string} The top-level field.
  */
 function topLevelPath(path) {
     const index = path.indexOf('.');
     return index !== -1 ? path.substring(0, index) : path;
 }
 
+/**
+ * Observer class monitors changes on a MongoDB collection.
+ * It handles initial fetch, diff computation, and calls registered listeners
+ * when documents are added, changed, or removed.
+ */
 class Observer {
     /**
-     * Creates an Observer instance.
+     * Constructs an Observer instance.
      * @param {Mongo.Collection} collection The collection to observe.
-     * @param {Object} options Observation options.
-     * @param {string} key The observer key.
+     * @param {Object} options Options including selector, fields, etc.
+     * @param {string} key A unique key for the observer.
      */
     constructor(collection, options, key) {
         this.collection = collection;
         this.options = options;
+        // MongoDB selector for documents to observe.
         this.selector = options.selector || {};
+        // Options for the Mongo find query.
         this.findOptions = options.options || {};
         this.findOptions.fields = this.findOptions.fields || {};
+        // If limit is set and lazyLimit option is not true, we always re-fetch.
         this.needToFetchAlways = this.findOptions.limit && !options.lazyLimit;
+        // Quick find options used for lightweight queries (only _id field).
         this.quickFindOptions = { ...this.findOptions, fields: { _id: 1 } };
 
+        // Setup projection: which fields to include/exclude.
         this.projectionFields = { ...this.findOptions.fields };
         this.projectionIncluding = null;
         this._initializeProjection();
 
+        // Channel name for receiving updates (default to collection name).
         this.channel = options.channel || collection._name;
         this.key = key;
+        // Map of listeners for different subscriptions (listenerId => callbacks).
         this.listeners = {};
+        // Set of actions (added/changed/removed) requested by listeners.
         this.actions = {};
+        // Cached documents keyed by their _id.
         this.docs = {};
+        // To handle out-of-order messages, store last method and timestamp per document.
         this.lastMethod = {};
         this.lastTs = {};
+        // Queue of messages received while processing is paused.
         this.messageQueue = [];
         this.paused = false;
         this.initiallyFetched = false;
         this.initialized = false;
 
+        // Validate that _id is not excluded from fields.
         if (this.findOptions.fields._id === 0 || this.findOptions.fields._id === false) {
             throw new Error('You may not observe a cursor with {fields: {_id: 0}}');
         }
@@ -61,25 +94,25 @@ class Observer {
      */
     _initializeProjection() {
         if (this.projectionFields) {
+            // Build a map of top-level fields from the projection.
             this.projectionTopFields = {};
             Object.entries(this.projectionFields).forEach(([path, rule]) => {
                 if (path === '_id') {
                     return;
                 }
-
+                // Convert rule to boolean (include/exclude).
                 rule = !!rule;
-
                 if (this.projectionIncluding === null) {
                     this.projectionIncluding = rule;
                 }
-
                 if (this.projectionIncluding !== rule) {
                     throw new Error('You cannot currently mix including and excluding fields.');
                 }
-
+                // Save only the top-level field.
                 this.projectionTopFields[topLevelPath(path)] = rule;
             });
 
+            // If docsMixin is provided, merge or remove mixin fields accordingly.
             if (this.options.docsMixin) {
                 Object.keys(this.options.docsMixin).forEach((key) => {
                     if (this.projectionIncluding) {
@@ -89,61 +122,95 @@ class Observer {
                     }
                 });
             }
+
+            // Create a key from the projectionFields object to check the cache.
+            const projectionKey = JSON.stringify(this.projectionFields);
+            if (projectionCache.has(projectionKey)) {
+                // Use cached compiled projection function.
+                this.projectionFn = projectionCache.get(projectionKey);
+            } else {
+                // Compile a new projection function and cache it.
+                const compiled = Minimongo.LocalCollection._compileProjection(this.projectionFields);
+                projectionCache.set(projectionKey, compiled);
+                this.projectionFn = compiled;
+            }
+        } else {
+            // If no projectionFields are provided, use identity function.
+            this.projectionFn = (doc) => doc;
         }
 
-        this.projectionFn = this.projectionFields
-            ? Minimongo.LocalCollection._compileProjection(this.projectionFields)
-            : (doc) => doc;
+        // Create a key from the selector object to check the cache.
+        const selectorKey = JSON.stringify(this.selector);
+        if (matcherCache.has(selectorKey)) {
+            // Use cached matcher.
+            this.matcher = matcherCache.get(selectorKey);
+        } else {
+            try {
+                // Create a new matcher and cache it.
+                this.matcher = new Minimongo.Matcher(this.selector);
+                matcherCache.set(selectorKey, this.matcher);
+            } catch (err) {
+                console.error('[Observer._initializeProjection] Error compiling matcher:', err);
+            }
+        }
 
         try {
-            this.matcher = new Minimongo.Matcher(this.selector);
+            // Combine projection with matcher if possible.
             this.findOptions.fields = this.projectionFields
                 && this.matcher.combineIntoProjection(this.projectionFields);
-        } catch (e) {
-            // Ignore error
+        } catch (err) {
+            console.error('[Observer._initializeProjection] Error combining matcher/projection:', err);
         }
     }
 
     /**
-     * Initializes the observer.
+     * Initializes the observer by registering it with the messenger.
+     * This allows the observer to receive messages via its channel.
      */
     initialize() {
         if (this.initialized) {
             return;
         }
-
+        // Register the observer unless it is marked as nonreactive.
         if (!this.options.nonreactive) {
             messenger.addObserver(this.key, this.channel);
         }
-
         this.initialized = true;
     }
 
     /**
-     * Adds a listener to the observer.
-     * @param {string} listenerId The listener ID.
-     * @param {Object} callbacks The callbacks for added/changed/removed.
+     * Adds a new listener (subscription) to this observer.
+     * The listener receives callbacks for added/changed/removed events.
+     * @param {string} listenerId Unique identifier for the listener.
+     * @param {Object} callbacks An object with added, changed, removed callback functions.
      */
     async addListener(listenerId, callbacks) {
         this.listeners[listenerId] = callbacks || {};
+        // Update the list of actions (what events to watch) based on listener callbacks.
         this._refreshActionsList(listenerId);
+        // Pause message processing while performing the initial fetch.
         this.pause();
+        // Fetch the initial set of documents.
         await this.initialFetch();
+        // Send initial added events to the new listener.
         this.initialAdd(listenerId);
+        // Resume processing of queued messages.
         this.resume();
     }
 
     /**
-     * Refreshes the list of actions based on listeners.
-     * @param {string=} listenerId The listener ID.
+     * Refreshes the list of actions (e.g., added, changed, removed) that should be observed.
+     * @param {string=} listenerId Optional listenerId to refresh only one listener's actions.
      * @private
      */
     _refreshActionsList(listenerId) {
         if (listenerId) {
+            // Update actions for the given listener.
             Object.keys(this.listeners[listenerId]).forEach((action) => {
                 this.actions[action] = 1;
             });
         } else {
+            // Update actions for all listeners.
             const actions = {};
             Object.values(this.listeners).forEach((callbacks) => {
                 Object.keys(callbacks).forEach((action) => {
@@ -155,7 +222,8 @@ class Observer {
     }
 
     /**
-     * Performs the initial fetch of documents.
+     * Performs the initial fetch of documents from the collection.
+     * Stores the documents in the observer's cache.
      */
     async initialFetch() {
         if (this.initiallyFetched) {
@@ -163,9 +231,10 @@ class Observer {
         }
 
         if (!this.options.withoutMongo) {
+            // Execute the Mongo query asynchronously.
             const cursor = this.collection.find(this.selector, this.findOptions);
             const docs = await cursor.fetchAsync();
-
+            // Store each document in the observer cache, applying docsMixin if provided.
             for (const doc of docs) {
                 this.docs[doc._id] = this.options.docsMixin ? { ...doc, ...this.options.docsMixin } : doc;
             }
@@ -175,12 +244,12 @@ class Observer {
     }
 
     /**
-     * Adds initial documents to listeners.
-     * @param {string} listenerId The listener ID.
+     * Sends initial "added" events to a newly added listener.
+     * @param {string} listenerId The listener identifier.
      */
     initialAdd(listenerId) {
         const callbacks = this.listeners[listenerId];
-
+        // For each cached document, call the "added" callback.
         Object.entries(this.docs).forEach(([id, doc]) => {
             if (doc && callbacks.added) {
                 callbacks.added(id, this.projectionFn(doc));
@@ -189,10 +258,10 @@ class Observer {
     }
 
     /**
-     * Calls the appropriate listeners for an action.
-     * @param {string} action The action type.
-     * @param {string} id The document ID.
-     * @param {Object=} fields The fields involved.
+     * Calls all listeners for a particular action (added/changed/removed) for a document.
+     * @param {string} action The type of action.
+     * @param {string} id The document _id.
+     * @param {Object=} fields The fields to send to the client.
      */
     callListeners(action, id, fields) {
         Object.values(this.listeners).forEach((callbacks) => {
@@ -204,65 +273,69 @@ class Observer {
 
     /**
      * Removes a listener from the observer.
-     * @param {string} listenerId The listener ID.
+     * If no listeners remain, the observer stops observing.
+     * @param {string} listenerId The listener identifier.
      */
     removeListener(listenerId) {
         delete this.listeners[listenerId];
         if (Object.keys(this.listeners).length === 0) {
+            // Stop the observer if no listeners remain.
             this.kill();
             this.actions = {};
         } else {
+            // Refresh the list of actions.
             this._refreshActionsList();
         }
     }
 
     /**
-     * Pauses message processing.
+     * Pauses the processing of incoming messages.
      */
     pause() {
         this.paused = true;
     }
 
     /**
-     * Resumes message processing.
+     * Resumes processing of messages.
+     * Processes any messages that were queued while paused.
      */
     resume() {
+        // Process messages in the queue.
         while (this.messageQueue.length) {
+            // Note: In this implementation, handleMessage is asynchronous,
+            // but we do not await here because order is not critical.
             this.handleMessage(this.messageQueue.shift());
         }
         this.paused = false;
     }
 
     /**
-     * Kills the observer.
+     * Stops the observer and unregisters it from the messenger.
      */
     kill() {
-        if (!this.initialized) {
-            return;
-        }
+        if (!this.initialized) return;
         this.initialized = false;
-
         if (!this.options.nonreactive) {
             messenger.removeObserver(this.key);
         }
-
         delete observers[this.key];
     }
 
     /**
-     * Processes a message from the messenger.
-     * @param {Object} message The message to process.
+     * Handles an incoming message from the messenger.
+     * If the observer is not ready, the message may be queued.
+     * @param {Object} message The incoming message.
      */
     onMessage(message) {
         if (!this.initiallyFetched) {
             return;
         }
-
+        // Filter messages based on withoutMongo and withMongoOnly flags.
         if (message.withoutMongo && this.options.withMongoOnly) {
             return;
         }
-
         if (this.paused) {
+            // Queue message if processing is paused.
             this.messageQueue.push(message);
         } else {
             this.handleMessage(message);
@@ -270,29 +343,38 @@ class Observer {
     }
 
     /**
-     * Handles an incoming message.
-     * @param {Object} message The message to handle.
+     * Processes an incoming message.
+     * Applies changes to the cached documents and calls listeners accordingly.
+     * @param {Object} message The message to process.
      */
     async handleMessage(message) {
+        // Helper to compute modified fields from a Mongo modifier.
         const computeModifiedFields = () => {
             if (!message.modifier || message._modifiedFields) {
                 return;
             }
-
             message._modifiedFields = {};
 
+            // Iterate over each entry in the modifier object.
+            // For example, message.modifier might look like:
+            // { $set: { "user.name": "Alice", "user.email": "alice@example.com" }, $inc: { "score": 1 } }
             Object.entries(message.modifier).forEach(([op, params]) => {
                 if (op.charAt(0) === '$') {
+                    // For each field path in the parameters object of the operator, extract the top-level field.
+                    // For example, for the path "user.name", topLevelPath will return "user".
                     Object.keys(params).forEach((path) => {
+                        // Mark the top-level field as modified.
                         message._modifiedFields[topLevelPath(path)] = true;
                     });
                 }
             });
         };
 
+        // Matching logic: check if document matches selector.
         if (this.matcher && message.doc) {
             if (!this.matcher.documentMatches(message.doc).result) {
                 if (this.docs[message.id]) {
+                    // Document no longer matches; notify removal.
                     this.callListeners('removed', message.id);
                     this.docs[message.id] = null;
                     if (!this.needToFetchAlways) {
@@ -304,13 +386,13 @@ class Observer {
             } else if (this.docs[message.id] && !this.needToFetchAlways) {
                 if (!this.actions.changed) {
                     return;
-                } if (this.projectionIncluding && message.modifier) {
+                }
+                if (this.projectionIncluding && message.modifier) {
                     computeModifiedFields();
-
+                    // Check if any relevant top-level field was modified.
                     const relevantModifier = Object.keys(message._modifiedFields).some(
                         (field) => this.projectionTopFields[field],
                     );
-
                     if (!relevantModifier) {
                         return;
                     }
@@ -329,12 +411,19 @@ class Observer {
 
         if (message.withoutMongo && !ids) {
             try {
-                const matcher = new Minimongo.Matcher(message.selector);
+                const selectorKey = JSON.stringify(message.selector);
+                let matcherForMessage;
+                if (matcherCache.has(selectorKey)) {
+                    matcherForMessage = matcherCache.get(selectorKey);
+                } else {
+                    matcherForMessage = new Minimongo.Matcher(message.selector);
+                    matcherCache.set(selectorKey, matcherForMessage);
+                }
                 ids = Object.values(this.docs)
-                    .filter((doc) => doc && matcher.documentMatches(doc).result)
+                    .filter((doc) => doc && matcherForMessage.documentMatches(doc).result)
                     .map((doc) => doc._id);
-            } catch (e) {
-                // Ignore error
+            } catch (err) {
+                console.error('[Observer.handleMessage] Error compiling matcher:', err);
             }
         }
 
@@ -342,13 +431,16 @@ class Observer {
             return;
         }
 
+        // Process each document id from the message.
         for (const id of ids) {
             const lastTs = this.lastTs[id];
             const badTS = lastTs >= message.ts;
             const lastMethod = this.lastMethod[id];
 
+            // Update timestamp if message is newer.
             this.lastTs[id] = badTS ? lastTs : message.ts;
 
+            // Skip message if out-of-order and not applicable.
             if (
                 badTS
                 && lastMethod
@@ -374,14 +466,24 @@ class Observer {
                 } else if (message.withoutMongo && message.method !== 'remove') {
                     try {
                         if (oldDoc) {
-                            const matcher = new Minimongo.Matcher(message.selector);
-                            if (!matcher.documentMatches(oldDoc).result) continue;
+                            // Retrieve a cached matcher for message.selector.
+                            const selectorKey = JSON.stringify(message.selector);
+                            let matcherForMessage;
+                            if (matcherCache.has(selectorKey)) {
+                                matcherForMessage = matcherCache.get(selectorKey);
+                            } else {
+                                matcherForMessage = new Minimongo.Matcher(message.selector);
+                                matcherCache.set(selectorKey, matcherForMessage);
+                            }
+                            // If oldDoc does not match the selector, skip processing.
+                            if (!matcherForMessage.documentMatches(oldDoc).result) {
+                                continue;
+                            }
                         }
-
                         newDoc = { _id: id, ...oldDoc };
                         Minimongo.LocalCollection._modify(newDoc, message.modifier);
-                    } catch (e) {
-                        // Ignore error
+                    } catch (err) {
+                        console.error('[Observer.handleMessage] Error modifying document:', err);
                     }
                 }
             }
@@ -396,17 +498,17 @@ class Observer {
                 try {
                     newDoc = EJSON.clone(oldDoc);
                     Minimongo.LocalCollection._modify(newDoc, message.modifier);
-                } catch (e) {
-                    // Ignore error
+                } catch (err) {
+                    console.error('[Observer.handleMessage] Error modifying document:', err);
                 }
             }
 
             const needToFetch = !newDoc && isRightId && message.method !== 'remove';
-
             if (needToFetch) {
                 newDoc = await this.collection.findOneAsync({ ...this.selector, _id: id }, this.findOptions);
             }
 
+            // Validate that the new document is acceptable.
             const docIsOk = newDoc && isRightId && (
                 message.withoutMongo
                 || needToFetch
@@ -425,7 +527,6 @@ class Observer {
 
                 let action;
                 let fields;
-
                 if (knownId) {
                     action = 'changed';
                     fields = DiffSequence.makeChangedFields(newDoc, oldDoc);
@@ -435,11 +536,9 @@ class Observer {
                 }
 
                 const finalFields = this.projectionFn(fields);
-
                 if (Object.keys(finalFields).length > 0) {
                     this.callListeners(action, id, finalFields);
                 }
-
                 this.docs[id] = newDoc;
             } else if (knownId) {
                 this.callListeners('removed', id);
@@ -447,13 +546,14 @@ class Observer {
             }
 
             if (fetchedRightIds) {
+                // Remove documents that are no longer valid.
                 for (const [docId, doc] of Object.entries(this.docs)) {
                     if (doc && !fetchedRightIds.includes(docId)) {
                         this.callListeners('removed', docId);
                         this.docs[docId] = null;
                     }
                 }
-
+                // Add documents that are newly fetched.
                 for (const fetchId of fetchedRightIds) {
                     if (!this.docs[fetchId]) {
                         const doc = await this.collection.findOneAsync({ _id: fetchId }, this.findOptions);
@@ -469,6 +569,8 @@ class Observer {
     }
 }
 
+// Set the global messenger callback to route incoming messages
+// to all observers registered on the channel.
 messenger.onMessage = (channel, message) => {
     const observersInChannel = messenger.channels[channel];
     if (observersInChannel) {
@@ -482,30 +584,34 @@ messenger.onMessage = (channel, message) => {
 };
 
 /**
- * Observes changes on a MongoDB collection.
+ * Sets up an observation on a MongoDB collection.
  * @param {Mongo.Collection} collection The collection to observe.
- * @param {Object=} options The options for observation.
- * @param {Object} callbacks The callbacks for added/changed/removed.
- * @return {{stop: function(), docs: Object}} An object with stop() method and docs.
+ * @param {Object=} options Observation options (selector, fields, etc).
+ * @param {Object} callbacks Callback functions for added, changed, removed events.
+ * @return {Object} An object with a stop() method to end the observation and the current docs cache.
  */
 async function observeChanges(collection, options = {}, callbacks = {}) {
+    // Generate a unique listener id.
     const listenerId = Random.id();
     const collectionName = collection._name;
+    // Create a unique key for the observer based on collection and options.
     const observerKey = options.observerKey || JSON.stringify([collectionName, options]);
 
     let observer = observers[observerKey];
     if (!observer) {
+        // If no observer exists for this key, create one.
         observer = new Observer(collection, options, observerKey);
         observers[observerKey] = observer;
     }
 
+    // Add the listener to the observer.
     await observer.addListener(listenerId, callbacks);
 
     return {
         stop() {
             observer.removeListener(listenerId);
         },
-        docs: observer.docs,
+        docs: observer.docs, // Expose the cached documents.
     };
 }
 

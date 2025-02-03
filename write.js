@@ -1,9 +1,10 @@
 /**
- * Performs a database write operation.
+ * Internal function that performs a database write operation.
+ * This function uses asynchronous methods on the collection.
  * @param {Mongo.Collection} collection The collection to write to.
- * @param {string} method The method ('insert', 'remove', 'update', 'upsert').
- * @param {Object} options The options for the write operation.
- * @return {Promise<any>} A promise that resolves with the result.
+ * @param {string} method The method to use ('insert', 'remove', 'update', 'upsert').
+ * @param {Object} options Options for the write operation.
+ * @return {Promise<any>} A promise resolving with the result of the operation.
  */
 async function _write(collection, method, options) {
     switch (method) {

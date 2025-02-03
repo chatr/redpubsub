@@ -8,6 +8,7 @@ Package.describe({
 
 Npm.depends({
     redis: '4.7.0',
+    'lru-cache': '11.0.2',
 });
 
 Package.onUse((api) => {
