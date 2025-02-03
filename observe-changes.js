@@ -33,6 +33,22 @@ function topLevelPath(path) {
 }
 
 /**
+ * Helper function to omit specified keys from an object.
+ * @param {Object} obj - The object to filter.
+ * @param {string[]} keys - An array of keys to omit.
+ * @return {Object} A new object without the omitted keys.
+ */
+function omit(obj, keys) {
+    const result = {};
+    for (const key in obj) {
+        if (Object.prototype.hasOwnProperty.call(obj, key) && !keys.includes(key)) {
+            result[key] = obj[key];
+        }
+    }
+    return result;
+}
+
+/**
  * Observer class monitors changes on a MongoDB collection.
  * It handles initial fetch, diff computation, and calls registered listeners
  * when documents are added, changed, or removed.
@@ -521,8 +537,13 @@ class Observer {
 
             if (message.method !== 'remove' && docIsOk) {
                 if (this.options.docsMixin) {
+                    // Compute modified fields and merge docsMixin into newDoc,
+                    // omitting any keys that have been modified.
                     computeModifiedFields();
-                    Object.assign(newDoc, this.options.docsMixin);
+                    Object.assign(
+                        newDoc,
+                        omit(this.options.docsMixin, Object.keys(message._modifiedFields || {})),
+                    );
                 }
 
                 let action;
@@ -558,7 +579,10 @@ class Observer {
                     if (!this.docs[fetchId]) {
                         const doc = await this.collection.findOneAsync({ _id: fetchId }, this.findOptions);
                         if (this.options.docsMixin) {
-                            Object.assign(doc, this.options.docsMixin);
+                            Object.assign(
+                                doc,
+                                omit(this.options.docsMixin, Object.keys(message._modifiedFields || {})),
+                            );
                         }
                         this.callListeners('added', fetchId, this.projectionFn(doc));
                         this.docs[fetchId] = doc;
