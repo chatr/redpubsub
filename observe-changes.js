@@ -578,6 +578,13 @@ class Observer {
                 for (const fetchId of fetchedRightIds) {
                     if (!this.docs[fetchId]) {
                         const doc = await this.collection.findOneAsync({ _id: fetchId }, this.findOptions);
+                        if (!doc) {
+                            if (this.docs[fetchId]) {
+                                this.callListeners('removed', fetchId);
+                                this.docs[fetchId] = null;
+                            }
+                            continue;
+                        }
                         if (this.options.docsMixin) {
                             Object.assign(
                                 doc,
