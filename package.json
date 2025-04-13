@@ -1,6 +1,6 @@
 {
   "name": "redpubsub",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "devDependencies": {
     "eslint": "^8.57.1",
     "eslint-config-airbnb-base": "^15.0.0"
