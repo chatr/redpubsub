@@ -20,6 +20,7 @@ Custom pub/sub interface for Meteor on top of Redis, updated for Meteor 3 compat
         - [Publishing with `withoutMongo` Option](#publishing-with-withoutmongo-option)
         - [Publishing Multiple Collections Simultaneously](#publishing-multiple-collections-simultaneously)
         - [Server-Side observeChanges](#server-side-observechanges)
+        - [Checking Redis Connection](#checking-redis-connection)
     - [Client Side](#client-side)
         - [Subscribing to Data](#subscribing-to-data)
         - [Using `RPS.write`](#using-rpswrite-on-the-client)
@@ -59,7 +60,7 @@ export RPS_REDIS_URL=redis://localhost:6379
 
 ## Compatibility
 
-- **Meteor version 3 and above:** Fully compatible, using the new asynchronous Meteor collections’ methods.
+- **Meteor version 3 and above:** Fully compatible, using the new asynchronous Meteor collections' methods.
 
 ---
 
@@ -235,6 +236,36 @@ async function observeServerChanges() {
 }
 
 observeServerChanges();
+```
+
+#### Checking Redis Connection
+
+Use `RPS.ping` to check the connection to Redis server:
+
+```js
+// server/main.js
+import { RPS } from 'meteor/chatra:redpubsub';
+
+async function checkRedisConnection() {
+  try {
+    const result = await RPS.ping();
+    console.log('Redis connection OK:', result); // Should log 'PONG'
+    return true;
+  } catch (err) {
+    console.error('Redis connection failed:', err);
+    return false;
+  }
+}
+
+// Example: Health check endpoint
+Meteor.methods({
+  async 'health.check'() {
+    const redisStatus = await checkRedisConnection();
+    return {
+      redis: redisStatus ? 'connected' : 'disconnected',
+    };
+  },
+});
 ```
 
 ### Client Side

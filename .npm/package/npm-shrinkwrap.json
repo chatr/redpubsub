@@ -2,59 +2,44 @@
   "lockfileVersion": 4,
   "dependencies": {
     "@redis/bloom": {
-      "version": "1.2.0",
-      "resolved": "https://registry.npmjs.org/@redis/bloom/-/bloom-1.2.0.tgz",
-      "integrity": "sha512-HG2DFjYKbpNmVXsa0keLHp/3leGJz1mjh09f2RLGGLQZzSHpkmZWuwJbAvo3QcRY8p80m5+ZdXZdYOSBLlp7Cg=="
+      "version": "5.9.0",
+      "resolved": "https://registry.npmjs.org/@redis/bloom/-/bloom-5.9.0.tgz",
+      "integrity": "sha512-W9D8yfKTWl4tP8lkC3MRYkMz4OfbuzE/W8iObe0jFgoRmgMfkBV+Vj38gvIqZPImtY0WB34YZkX3amYuQebvRQ=="
     },
     "@redis/client": {
-      "version": "1.6.0",
-      "resolved": "https://registry.npmjs.org/@redis/client/-/client-1.6.0.tgz",
-      "integrity": "sha512-aR0uffYI700OEEH4gYnitAnv3vzVGXCFvYfdpu/CJKvk4pHfLPEy/JSZyrpQ+15WhXe1yJRXLtfQ84s4mEXnPg=="
-    },
-    "@redis/graph": {
-      "version": "1.1.1",
-      "resolved": "https://registry.npmjs.org/@redis/graph/-/graph-1.1.1.tgz",
-      "integrity": "sha512-FEMTcTHZozZciLRl6GiiIB4zGm5z5F3F6a6FZCyrfxdKOhFlGkiAqlexWMBzCi4DcRoyiOsuLfW+cjlGWyExOw=="
+      "version": "5.9.0",
+      "resolved": "https://registry.npmjs.org/@redis/client/-/client-5.9.0.tgz",
+      "integrity": "sha512-EI0Ti5pojD2p7TmcS7RRa+AJVahdQvP/urpcSbK/K9Rlk6+dwMJTQ354pCNGCwfke8x4yKr5+iH85wcERSkwLQ=="
     },
     "@redis/json": {
-      "version": "1.0.7",
-      "resolved": "https://registry.npmjs.org/@redis/json/-/json-1.0.7.tgz",
-      "integrity": "sha512-6UyXfjVaTBTJtKNG4/9Z8PSpKE6XgSyEb8iwaqDcy+uKrd/DGYHTWkUdnQDyzm727V7p21WUMhsqz5oy65kPcQ=="
+      "version": "5.9.0",
+      "resolved": "https://registry.npmjs.org/@redis/json/-/json-5.9.0.tgz",
+      "integrity": "sha512-Bm2jjLYaXdUWPb9RaEywxnjmzw7dWKDZI4MS79mTWPV16R982jVWBj6lY2ZGelJbwxHtEVg4/FSVgYDkuO/MxA=="
     },
     "@redis/search": {
-      "version": "1.2.0",
-      "resolved": "https://registry.npmjs.org/@redis/search/-/search-1.2.0.tgz",
-      "integrity": "sha512-tYoDBbtqOVigEDMAcTGsRlMycIIjwMCgD8eR2t0NANeQmgK/lvxNAvYyb6bZDD4frHRhIHkJu2TBRvB0ERkOmw=="
+      "version": "5.9.0",
+      "resolved": "https://registry.npmjs.org/@redis/search/-/search-5.9.0.tgz",
+      "integrity": "sha512-jdk2csmJ29DlpvCIb2ySjix2co14/0iwIT3C0I+7ZaToXgPbgBMB+zfEilSuncI2F9JcVxHki0YtLA0xX3VdpA=="
     },
     "@redis/time-series": {
-      "version": "1.1.0",
-      "resolved": "https://registry.npmjs.org/@redis/time-series/-/time-series-1.1.0.tgz",
-      "integrity": "sha512-c1Q99M5ljsIuc4YdaCwfUEXsofakb9c8+Zse2qxTadu8TalLXuAESzLvFAvNVbkmSlvlzIQOLpBCmWI9wTOt+g=="
+      "version": "5.9.0",
+      "resolved": "https://registry.npmjs.org/@redis/time-series/-/time-series-5.9.0.tgz",
+      "integrity": "sha512-W6ILxcyOqhnI7ELKjJXOktIg3w4+aBHugDbVpgVLPZ+YDjObis1M0v7ZzwlpXhlpwsfePfipeSK+KWNuymk52w=="
     },
     "cluster-key-slot": {
       "version": "1.1.2",
       "resolved": "https://registry.npmjs.org/cluster-key-slot/-/cluster-key-slot-1.1.2.tgz",
       "integrity": "sha512-RMr0FhtfXemyinomL4hrWcYJxmX6deFdCxpJzhDttxgO1+bcCnkk+9drydLVDmAMG7NE6aN/fl4F7ucU/90gAA=="
     },
-    "generic-pool": {
-      "version": "3.9.0",
-      "resolved": "https://registry.npmjs.org/generic-pool/-/generic-pool-3.9.0.tgz",
-      "integrity": "sha512-hymDOu5B53XvN4QT9dBmZxPX4CWhBPPLguTZ9MMFeFa/Kg0xWVfylOVNlJji/E7yTZWFd/q9GO5TxDLq156D7g=="
-    },
     "lru-cache": {
-      "version": "11.0.2",
-      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.0.2.tgz",
-      "integrity": "sha512-123qHRfJBmo2jXDbo/a5YOQrJoHF/GNQTLzQ5+IdK5pWpceK17yRc6ozlWd25FxvGKQbIUs91fDFkXmDHTKcyA=="
+      "version": "11.2.2",
+      "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-11.2.2.tgz",
+      "integrity": "sha512-F9ODfyqML2coTIsQpSkRHnLSZMtkU8Q+mSfcaIyKwy58u+8k5nvAYeiNhsyMARvzNcXJ9QfWVrcPsC9e9rAxtg=="
     },
     "redis": {
-      "version": "4.7.0",
-      "resolved": "https://registry.npmjs.org/redis/-/redis-4.7.0.tgz",
-      "integrity": "sha512-zvmkHEAdGMn+hMRXuMBtu4Vo5P6rHQjLoHftu+lBqq8ZTA3RCVC/WzD790bkKKiNFp7d5/9PcSD19fJyyRvOdQ=="
-    },
-    "yallist": {
-      "version": "4.0.0",
-      "resolved": "https://registry.npmjs.org/yallist/-/yallist-4.0.0.tgz",
-      "integrity": "sha512-3wdGidZyq5PB084XLES5TpOSRA3wjXAlIWMhum2kRcv/41Sn2emQ0dycQW4uZXLejwKvg6EsvbdlVL+FYEct7A=="
+      "version": "5.9.0",
+      "resolved": "https://registry.npmjs.org/redis/-/redis-5.9.0.tgz",
+      "integrity": "sha512-E8dQVLSyH6UE/C9darFuwq4usOPrqfZ1864kI4RFbr5Oj9ioB9qPF0oJMwX7s8mf6sPYrz84x/Dx1PGF3/0EaQ=="
     }
   }
 }

@@ -1,14 +1,14 @@
 Package.describe({
     name: 'chatra:redpubsub',
-    version: '1.0.1',
+    version: '1.0.2',
     summary: 'Custom pub/sub interface for Meteor on top of Redis',
     git: 'https://github.com/chatr/redpubsub.git',
     documentation: 'README.md',
 });
 
 Npm.depends({
-    redis: '4.7.0',
-    'lru-cache': '11.0.2',
+    redis: '5.9.0',
+    'lru-cache': '11.2.2',
 });
 
 Package.onUse((api) => {
