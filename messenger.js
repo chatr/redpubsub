@@ -19,7 +19,7 @@ class Messenger {
      * @param {string} observerKey Unique key identifying the observer.
      * @param {string} channel The Redis channel to subscribe to.
      */
-    addObserver(observerKey, channel) {
+    async addObserver(observerKey, channel) {
         // Create channel entry if it doesn't exist.
         if (!this.channels[channel]) {
             this.channels[channel] = {};
@@ -29,21 +29,21 @@ class Messenger {
         // Map the observer key to the channel.
         this.observers[observerKey] = channel;
         // Subscribe to the Redis channel.
-        subscribe(channel);
+        await subscribe(channel);
     }
 
     /**
      * Removes an observer from a channel.
      * @param {string} observerKey Unique key identifying the observer.
      */
-    removeObserver(observerKey) {
+    async removeObserver(observerKey) {
         const channel = this.observers[observerKey];
         if (channel) {
             // Remove observer from the channel's observer list.
             delete this.channels[channel][observerKey];
             // If no more observers on the channel, unsubscribe from Redis.
             if (Object.keys(this.channels[channel]).length === 0) {
-                unsubscribe(channel);
+                await unsubscribe(channel);
                 delete this.channels[channel];
             }
         }

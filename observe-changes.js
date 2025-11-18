@@ -182,14 +182,18 @@ class Observer {
     /**
      * Initializes the observer by registering it with the messenger.
      * This allows the observer to receive messages via its channel.
+     * Note: Called from constructor, so errors are handled internally.
      */
     initialize() {
         if (this.initialized) {
             return;
         }
         // Register the observer unless it is marked as nonreactive.
+        // Fire-and-forget since this is called from constructor (cannot be async).
         if (!this.options.nonreactive) {
-            messenger.addObserver(this.key, this.channel);
+            messenger.addObserver(this.key, this.channel).catch((err) => {
+                console.error('Error initializing observer:', err);
+            });
         }
         this.initialized = true;
     }
@@ -320,7 +324,10 @@ class Observer {
         while (this.messageQueue.length) {
             // Note: In this implementation, handleMessage is asynchronous,
             // but we do not await here because order is not critical.
-            this.handleMessage(this.messageQueue.shift());
+            // Errors are handled internally in handleMessage.
+            this.handleMessage(this.messageQueue.shift()).catch((err) => {
+                console.error('Error handling queued message:', err);
+            });
         }
         this.paused = false;
     }
@@ -332,7 +339,11 @@ class Observer {
         if (!this.initialized) return;
         this.initialized = false;
         if (!this.options.nonreactive) {
-            messenger.removeObserver(this.key);
+            // Fire-and-forget since kill() is called synchronously from removeListener.
+            // Errors are handled internally in removeObserver.
+            messenger.removeObserver(this.key).catch((err) => {
+                console.error('Error removing observer:', err);
+            });
         }
         delete observers[this.key];
     }
@@ -354,7 +365,11 @@ class Observer {
             // Queue message if processing is paused.
             this.messageQueue.push(message);
         } else {
-            this.handleMessage(message);
+            // Fire-and-forget: handleMessage is async, but we don't await here.
+            // Errors are handled internally in handleMessage.
+            this.handleMessage(message).catch((err) => {
+                console.error('Error handling message:', err);
+            });
         }
     }
 
