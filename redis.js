@@ -112,7 +112,6 @@ async function subscribe(channel) {
                 messenger.handleMessage(channelName, message);
             }
         });
-        console.info(`RPS: Subscribed to channel: ${channel}`);
     } catch (err) {
         console.error('RPS: Error subscribing to channel:', channel, err);
     }
@@ -136,7 +135,6 @@ async function unsubscribe(channel) {
     
     try {
         await clients.sub.unsubscribe(channel);
-        console.info(`RPS: Unsubscribed from channel: ${channel}`);
     } catch (err) {
         console.error('RPS: Error unsubscribing from channel:', channel, err);
     }
