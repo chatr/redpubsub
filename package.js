@@ -7,7 +7,7 @@ Package.describe({
 });
 
 Npm.depends({
-    redis: '5.9.0',
+    redis: '5.10.0',
     'lru-cache': '11.2.2',
 });
 
