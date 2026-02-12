@@ -1,5 +1,5 @@
 import { Random } from 'meteor/random';
-import { createClient } from 'redis';
+import { createClient, createSentinel } from 'redis';
 import { messenger } from './messenger';
 
 // Generate a unique server id to prevent echoing messages sent by this server.
@@ -8,27 +8,116 @@ const serverId = Random.id();
 const clients = {};
 
 /**
- * Parses the Redis connection URL from the environment variable.
- * @return {Object} The Redis connection options.
+ * @typedef {Object} SentinelConfig
+ * @property {'sentinel'} mode
+ * @property {Array<{host: string, port: number}>} sentinelRootNodes
+ * @property {string} name - Sentinel master name.
+ * @property {Object} [nodeClientOptions] - Options for the underlying Redis client (e.g., password).
  */
-function parseRedisEnvUrl() {
-    if (process.env.RPS_REDIS_URL) {
-        return { url: process.env.RPS_REDIS_URL };
+
+/**
+ * @typedef {Object} RegularConfig
+ * @property {'regular'} mode
+ * @property {string} [url] - Redis connection URL.
+ */
+
+/**
+ * Parses Redis connection configuration from environment variables.
+ *
+ * Sentinel mode (preferred for K8s):
+ *   RPS_REDIS_SENTINEL_NODES - Comma-separated sentinel addresses (host:port).
+ *   RPS_REDIS_SENTINEL_NAME  - Master name (default: "mymaster").
+ *   RPS_REDIS_PASSWORD        - Password for Redis master nodes.
+ *
+ * Regular mode (backward compatible):
+ *   RPS_REDIS_URL - Standard redis:// connection URL.
+ *
+ * @return {SentinelConfig | RegularConfig}
+ */
+function parseRedisConfig() {
+    if (process.env.RPS_REDIS_SENTINEL_NODES) {
+        const sentinelRootNodes = process.env.RPS_REDIS_SENTINEL_NODES
+            .split(',')
+            .map((node) => node.trim())
+            .filter((node) => node.length > 0)
+            .map((node) => {
+                const lastColon = node.lastIndexOf(':');
+                if (lastColon === -1) {
+                    return { host: node, port: 26379 };
+                }
+                return {
+                    host: node.slice(0, lastColon),
+                    port: parseInt(node.slice(lastColon + 1), 10) || 26379,
+                };
+            });
+
+        if (sentinelRootNodes.length === 0) {
+            throw new Error('RPS_REDIS_SENTINEL_NODES is set but contains no valid sentinel nodes (check for trailing or double commas).');
+        }
+
+        const name = process.env.RPS_REDIS_SENTINEL_NAME || 'mymaster';
+        const password = process.env.RPS_REDIS_PASSWORD;
+        const nodeClientOptions = password ? { password } : {};
+
+        return { mode: 'sentinel', sentinelRootNodes, name, nodeClientOptions };
     }
-    return {};
+
+    if (process.env.RPS_REDIS_URL) {
+        return { mode: 'regular', url: process.env.RPS_REDIS_URL };
+    }
+
+    return { mode: 'regular' };
 }
 
-const redisConfig = parseRedisEnvUrl();
+const redisConfig = parseRedisConfig();
 
 /**
  * Creates a Redis client for either publishing or subscribing.
+ * Uses Sentinel discovery when RPS_REDIS_SENTINEL_NODES is set,
+ * otherwise falls back to a direct connection via RPS_REDIS_URL.
  * @param {string} key The client key, e.g., 'pub' or 'sub'.
  */
 async function createRedisClient(key) {
     const logLabel = `RPS: [${key}]`;
-    console.info(`${logLabel} connecting to Redis...`, redisConfig);
 
-    const client = createClient(redisConfig);
+    let client;
+
+    if (redisConfig.mode === 'sentinel') {
+        console.info(`${logLabel} connecting to Redis via Sentinel...`, {
+            sentinelNodes: redisConfig.sentinelRootNodes,
+            masterName: redisConfig.name,
+        });
+
+        client = await createSentinel({
+            name: redisConfig.name,
+            sentinelRootNodes: redisConfig.sentinelRootNodes,
+            nodeClientOptions: redisConfig.nodeClientOptions,
+        });
+    } else {
+        const config = redisConfig.url ? { url: redisConfig.url } : {};
+
+        // Avoid logging the full Redis URL, which may contain credentials.
+        let logConfig;
+        if (redisConfig.url) {
+            try {
+                const parsed = new URL(redisConfig.url);
+                logConfig = {
+                    urlProvided: true,
+                    host: parsed.hostname,
+                    port: parsed.port || undefined,
+                };
+            } catch (e) {
+                // If parsing fails, only indicate that a URL was provided.
+                logConfig = { urlProvided: true };
+            }
+        } else {
+            logConfig = { urlProvided: false };
+        }
+
+        console.info(`${logLabel} connecting to Redis...`, logConfig);
+        client = createClient(config);
+    }
+
     clients[key] = client;
 
     // Attach error handler.
