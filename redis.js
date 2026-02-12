@@ -38,17 +38,22 @@ function parseRedisConfig() {
     if (process.env.RPS_REDIS_SENTINEL_NODES) {
         const sentinelRootNodes = process.env.RPS_REDIS_SENTINEL_NODES
             .split(',')
+            .map((node) => node.trim())
+            .filter((node) => node.length > 0)
             .map((node) => {
-                const trimmed = node.trim();
-                const lastColon = trimmed.lastIndexOf(':');
+                const lastColon = node.lastIndexOf(':');
                 if (lastColon === -1) {
-                    return { host: trimmed, port: 26379 };
+                    return { host: node, port: 26379 };
                 }
                 return {
-                    host: trimmed.slice(0, lastColon),
-                    port: parseInt(trimmed.slice(lastColon + 1), 10) || 26379,
+                    host: node.slice(0, lastColon),
+                    port: parseInt(node.slice(lastColon + 1), 10) || 26379,
                 };
             });
+
+        if (sentinelRootNodes.length === 0) {
+            throw new Error('RPS_REDIS_SENTINEL_NODES is set but contains no valid sentinel nodes (check for trailing or double commas).');
+        }
 
         const name = process.env.RPS_REDIS_SENTINEL_NAME || 'mymaster';
         const password = process.env.RPS_REDIS_PASSWORD;
@@ -90,7 +95,26 @@ async function createRedisClient(key) {
         });
     } else {
         const config = redisConfig.url ? { url: redisConfig.url } : {};
-        console.info(`${logLabel} connecting to Redis...`, config);
+
+        // Avoid logging the full Redis URL, which may contain credentials.
+        let logConfig;
+        if (redisConfig.url) {
+            try {
+                const parsed = new URL(redisConfig.url);
+                logConfig = {
+                    urlProvided: true,
+                    host: parsed.hostname,
+                    port: parsed.port || undefined,
+                };
+            } catch (e) {
+                // If parsing fails, only indicate that a URL was provided.
+                logConfig = { urlProvided: true };
+            }
+        } else {
+            logConfig = { urlProvided: false };
+        }
+
+        console.info(`${logLabel} connecting to Redis...`, logConfig);
         client = createClient(config);
     }
 
