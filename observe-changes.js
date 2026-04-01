@@ -264,6 +264,19 @@ class Observer {
     }
 
     /**
+     * Removes a document from the observer cache.
+     * Preserves lastTs/lastMethod to maintain out-of-order message protection
+     * (e.g. a late update arriving after a remove must not resurrect the document).
+     * lastTs/lastMethod are intentionally kept to handle arbitrarily delayed messages.
+     * They are lightweight (primitive values, O(1) lookup, never iterated) and are
+     * freed when the observer is killed.
+     * @param {string} id The document _id to remove.
+     */
+    _removeDoc(id) {
+        delete this.docs[id];
+    }
+
+    /**
      * Sends initial "added" events to a newly added listener.
      * @param {string} listenerId The listener identifier.
      */
@@ -271,7 +284,7 @@ class Observer {
         const callbacks = this.listeners[listenerId];
         // For each cached document, call the "added" callback.
         Object.entries(this.docs).forEach(([id, doc]) => {
-            if (doc && callbacks.added) {
+            if (callbacks.added) {
                 callbacks.added(id, this.projectionFn(doc));
             }
         });
@@ -407,7 +420,7 @@ class Observer {
                 if (this.docs[message.id]) {
                     // Document no longer matches; notify removal.
                     this.callListeners('removed', message.id);
-                    this.docs[message.id] = null;
+                    this._removeDoc(message.id);
                     if (!this.needToFetchAlways) {
                         return;
                     }
@@ -578,15 +591,15 @@ class Observer {
                 this.docs[id] = newDoc;
             } else if (knownId) {
                 this.callListeners('removed', id);
-                this.docs[id] = null;
+                this._removeDoc(id);
             }
 
             if (fetchedRightIds) {
                 // Remove documents that are no longer valid.
-                for (const [docId, doc] of Object.entries(this.docs)) {
-                    if (doc && !fetchedRightIds.includes(docId)) {
+                for (const [docId] of Object.entries(this.docs)) {
+                    if (!fetchedRightIds.includes(docId)) {
                         this.callListeners('removed', docId);
-                        this.docs[docId] = null;
+                        this._removeDoc(docId);
                     }
                 }
                 // Add documents that are newly fetched.
@@ -596,7 +609,7 @@ class Observer {
                         if (!doc) {
                             if (this.docs[fetchId]) {
                                 this.callListeners('removed', fetchId);
-                                this.docs[fetchId] = null;
+                                this._removeDoc(fetchId);
                             }
                             continue;
                         }
