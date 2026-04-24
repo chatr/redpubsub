@@ -106,7 +106,7 @@ async function createRedisClient(key) {
                     host: parsed.hostname,
                     port: parsed.port || undefined,
                 };
-            } catch (e) {
+            } catch {
                 // If parsing fails, only indicate that a URL was provided.
                 logConfig = { urlProvided: true };
             }
@@ -291,7 +291,7 @@ async function ping() {
             }
         }
         
-        throw new Error(`Redis ping failed: ${err.message}`);
+        throw new Error(`Redis ping failed: ${err.message}`, { cause: err });
     }
 }
 
