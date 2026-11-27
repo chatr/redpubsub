@@ -446,6 +446,11 @@ class Observer {
 
         let fetchedRightIds;
         let ids = Array.isArray(message.id) ? message.id : [message.id];
+        // A withoutMongo write by a selector without a string _id is published with id null:
+        // its ids are resolved against the cached documents below.
+        if (message.withoutMongo && !message.id) {
+            ids = null;
+        }
 
         if (this.needToFetchAlways) {
             const cursor = this.collection.find(this.selector, this.quickFindOptions);
