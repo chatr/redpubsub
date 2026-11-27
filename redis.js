@@ -157,8 +157,14 @@ async function createRedisClient(key) {
     // Connect asynchronously.
     await client.connect();
 
-    // A Sentinel client emits no ready event.
+    // A Sentinel client emits no ready event. After a failover it moves only the acknowledged
+    // subscriptions to the new master, so the routed channels are subscribed again.
     if (key === 'sub' && redisConfig.mode === 'sentinel') {
+        client.on('topology-change', (event) => {
+            if (event.type === 'MASTER_CHANGE') {
+                resubscribeAll();
+            }
+        });
         await resubscribeAll();
     }
 }
@@ -204,13 +210,15 @@ function onRedisMessage(messageString, channelName) {
 /**
  * Subscribes to a Redis channel.
  * When a message is received, it is parsed and passed to the messenger.
- * While the client reconnects, node-redis queues the command and sends it once connected.
  * @param {string | string[]} channel The channel or channels to subscribe to.
  */
 async function subscribe(channel) {
-    if (!clients.sub?.isOpen) {
-        // resubscribeAll() picks the channel up from the messenger once the client is ready.
-        console.warn('RPS: Sub client is not open, channel will be subscribed when ready');
+    // A regular client is not ready while it reconnects, and the command is not left to its
+    // offline queue: node-redis drops the messages of a SUBSCRIBE sent from that queue when
+    // no other channel is subscribed. resubscribeAll() picks the channel up from the
+    // messenger once the client is ready.
+    if (!clients.sub?.isReady) {
+        console.warn('RPS: Sub client is not ready, channel will be subscribed when ready');
         return;
     }
 
@@ -237,6 +245,7 @@ async function resubscribeAll() {
  * @param {string} channel The channel to unsubscribe from.
  */
 async function unsubscribe(channel) {
+    // Queued while offline, otherwise node-redis restores the channel on reconnect.
     if (!clients.sub?.isOpen) {
         return;
     }
