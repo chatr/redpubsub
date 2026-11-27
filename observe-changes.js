@@ -92,6 +92,8 @@ class Observer {
         this.lastTs = {};
         // Queue of messages received while processing is paused.
         this.messageQueue = [];
+        // Tail of the chain of messages being processed one at a time (see processMessage).
+        this.processing = Promise.resolve();
         this.paused = false;
         this.initiallyFetched = false;
         this.initialized = false;
@@ -335,12 +337,8 @@ class Observer {
     resume() {
         // Process messages in the queue.
         while (this.messageQueue.length) {
-            // Note: In this implementation, handleMessage is asynchronous,
-            // but we do not await here because order is not critical.
-            // Errors are handled internally in handleMessage.
-            this.handleMessage(this.messageQueue.shift()).catch((err) => {
-                console.error('Error handling queued message:', err);
-            });
+            // Fire-and-forget: errors are logged in processMessage.
+            this.processMessage(this.messageQueue.shift(), 'Error handling queued message:');
         }
         this.paused = false;
     }
@@ -378,12 +376,31 @@ class Observer {
             // Queue message if processing is paused.
             this.messageQueue.push(message);
         } else {
-            // Fire-and-forget: handleMessage is async, but we don't await here.
-            // Errors are handled internally in handleMessage.
-            this.handleMessage(message).catch((err) => {
-                console.error('Error handling message:', err);
-            });
+            // Fire-and-forget: errors are logged in processMessage.
+            this.processMessage(message, 'Error handling message:');
         }
+    }
+
+    /**
+     * Runs handleMessage for a message and logs its errors.
+     * An observer that re-fetches on every message (limit without lazyLimit) handles
+     * its messages one at a time: handleMessage reads the cached documents, awaits Mongo
+     * and then updates the cache, so concurrent runs would each see the same document
+     * as missing and call "added" (or "removed") for it more than once.
+     * Other observers keep handling messages concurrently.
+     * @param {Object} message The message to process.
+     * @param {string} errorPrefix Text logged before an error.
+     * @return {Promise<void>} Resolves once the message has been handled.
+     */
+    processMessage(message, errorPrefix) {
+        const run = () => this.handleMessage(message).catch((err) => {
+            console.error(errorPrefix, err);
+        });
+        if (!this.needToFetchAlways) {
+            return run();
+        }
+        this.processing = this.processing.then(run);
+        return this.processing;
     }
 
     /**
