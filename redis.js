@@ -137,6 +137,11 @@ async function createRedisClient(key) {
     // Log when client is ready
     client.on('ready', () => {
         console.info(`${logLabel} Redis client is ready!`);
+        // node-redis restores only the channels it had subscribed; this adds the ones
+        // requested while the client was missing or offline.
+        if (key === 'sub') {
+            resubscribeAll();
+        }
     });
 
     // Log reconnection attempts.
@@ -151,6 +156,11 @@ async function createRedisClient(key) {
 
     // Connect asynchronously.
     await client.connect();
+
+    // A Sentinel client emits no ready event.
+    if (key === 'sub' && redisConfig.mode === 'sentinel') {
+        await resubscribeAll();
+    }
 }
 
 // Immediately create Redis clients for both publishing and subscribing.
@@ -168,41 +178,57 @@ async function createRedisClient(key) {
 })();
 
 /**
+ * Handles a message of any subscribed channel.
+ * One function for every channel, so node-redis keeps a single listener per channel
+ * and an UNSUBSCRIBE followed by a SUBSCRIBE of the same channel is tracked correctly.
+ * @param {string} messageString The raw message.
+ * @param {string} channelName The channel the message was published to.
+ */
+function onRedisMessage(messageString, channelName) {
+    let message;
+    try {
+        message = JSON.parse(messageString);
+    } catch (err) {
+        console.error(
+            `RPS: Failed to parse JSON. Channel: ${channelName}, Message: ${messageString}`,
+            err,
+        );
+        return;
+    }
+    // Only process the message if it did not originate from this server.
+    if (message && message._serverId !== serverId) {
+        messenger.handleMessage(channelName, message);
+    }
+}
+
+/**
  * Subscribes to a Redis channel.
  * When a message is received, it is parsed and passed to the messenger.
- * @param {string} channel The channel to subscribe to.
+ * While the client reconnects, node-redis queues the command and sends it once connected.
+ * @param {string | string[]} channel The channel or channels to subscribe to.
  */
 async function subscribe(channel) {
-    if (!clients.sub) {
-        console.warn('RPS: Sub client not available');
+    if (!clients.sub?.isOpen) {
+        // resubscribeAll() picks the channel up from the messenger once the client is ready.
+        console.warn('RPS: Sub client is not open, channel will be subscribed when ready');
         return;
     }
-    
-    // Check if client is ready
-    if (!clients.sub.isReady) {
-        console.warn('RPS: Sub client is not ready');
-        return;
-    }
-    
+
     try {
-        await clients.sub.subscribe(channel, (messageString, channelName) => {
-            let message;
-            try {
-                message = JSON.parse(messageString);
-            } catch (err) {
-                console.error(
-                    `RPS: Failed to parse JSON. Channel: ${channelName}, Message: ${messageString}`,
-                    err,
-                );
-                return;
-            }
-            // Only process the message if it did not originate from this server.
-            if (message && message._serverId !== serverId) {
-                messenger.handleMessage(channelName, message);
-            }
-        });
+        await clients.sub.subscribe(channel, onRedisMessage);
     } catch (err) {
         console.error('RPS: Error subscribing to channel:', channel, err);
+    }
+}
+
+/**
+ * Subscribes to every channel the messenger routes.
+ * Channels already subscribed are a no-op in node-redis, so it is safe to call on every ready.
+ */
+async function resubscribeAll() {
+    const channels = Object.keys(messenger.channels);
+    if (channels.length) {
+        await subscribe(channels);
     }
 }
 
@@ -211,19 +237,12 @@ async function subscribe(channel) {
  * @param {string} channel The channel to unsubscribe from.
  */
 async function unsubscribe(channel) {
-    if (!clients.sub) {
-        console.warn('RPS: Sub client not available');
+    if (!clients.sub?.isOpen) {
         return;
     }
-    
-    // Check if client is ready
-    if (!clients.sub.isReady) {
-        console.warn('RPS: Sub client is not ready');
-        return;
-    }
-    
+
     try {
-        await clients.sub.unsubscribe(channel);
+        await clients.sub.unsubscribe(channel, onRedisMessage);
     } catch (err) {
         console.error('RPS: Error unsubscribing from channel:', channel, err);
     }

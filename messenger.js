@@ -38,17 +38,21 @@ class Messenger {
      */
     async removeObserver(observerKey) {
         const channel = this.observers[observerKey];
-        if (channel) {
-            // Remove observer from the channel's observer list.
-            delete this.channels[channel][observerKey];
-            // If no more observers on the channel, unsubscribe from Redis.
-            if (Object.keys(this.channels[channel]).length === 0) {
-                await unsubscribe(channel);
-                delete this.channels[channel];
-            }
-        }
-        // Remove the observer mapping.
+        const observersInChannel = channel && this.channels[channel];
+
+        // All bookkeeping is done before awaiting UNSUBSCRIBE: an observer registered
+        // meanwhile, possibly under the same key, creates new entries that must survive.
         delete this.observers[observerKey];
+        if (!observersInChannel) {
+            return;
+        }
+        delete observersInChannel[observerKey];
+
+        // If no more observers on the channel, unsubscribe from Redis.
+        if (Object.keys(observersInChannel).length === 0) {
+            delete this.channels[channel];
+            await unsubscribe(channel);
+        }
     }
 
     /**
